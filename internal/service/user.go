@@ -8,8 +8,16 @@ import (
 	"gorm.io/gorm"
 )
 
+// 此处的目的是调用sql语句的
 type UserService struct {
 	repo *repository.UserRepository
+}
+
+// UserService 的工厂函数，用于依赖注入
+func NewUserService(repo *repository.UserRepository) *UserService {
+	return &UserService{
+		repo: repo,
+	}
 }
 
 // 用户注册服务
