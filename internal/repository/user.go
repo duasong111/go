@@ -3,6 +3,7 @@ package repository
 // 此处的目的是写那些sql语句的，然后返回给service去进行处理
 import (
 	"awesomeProject/internal/model"
+	"errors"
 	"gorm.io/gorm"
 )
 
@@ -25,5 +26,8 @@ func (r *UserRepository) CreateUser(user *model.User) error {
 func (r *UserRepository) GetUserByUsername(username string) (*model.User, error) {
 	var user model.User
 	err := r.db.Where("username = ?", username).First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, errors.New("用户不存在")
+	}
 	return &user, err
 }
