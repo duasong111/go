@@ -14,11 +14,17 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	userService := service.NewUserService(userRepo)
 	userHandler := controllers.NewUserHandler(userService)
 
-	api := r.Group("/api")
-	api.Use(middleware.AuthMiddleware())
+	publicAPI := r.Group("/api")
 	{
-		api.POST("/register", userHandler.Register)
-		api.POST("/login", userHandler.Login)
-		api.POST("/logout", userHandler.Logout)
+		publicAPI.POST("/register", userHandler.Register)
+		publicAPI.POST("/login", userHandler.Login)
+	}
+
+	// 受保护路由组（需认证）
+	protectedAPI := r.Group("/api").Use(middleware.AuthMiddleware())
+	{
+		protectedAPI.POST("/logout", userHandler.Logout)
+		protectedAPI.PUT("/update", userHandler.Update)
+		protectedAPI.PUT("/modify", userHandler.ModifyPW)
 	}
 }

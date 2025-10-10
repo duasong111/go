@@ -13,6 +13,7 @@ type Response struct {
 }
 
 // 数据返回成功
+
 func RightResponse(c *gin.Context, data interface{}, message string) {
 	c.JSON(http.StatusOK, Response{
 		StatusCode: http.StatusOK,
@@ -23,6 +24,7 @@ func RightResponse(c *gin.Context, data interface{}, message string) {
 }
 
 // 数据返回失败
+
 func ErrorResponse(c *gin.Context, statusCode int, message string) {
 	c.JSON(statusCode, Response{
 		StatusCode: statusCode,

@@ -9,6 +9,7 @@ import (
 )
 
 // 好处是可以无障碍的去切换数据库
+
 func main() {
 	dsn := "host=192.168.1.3 user=postgres dbname=intellicamera port=5432 password=gsm200818534 sslmode=disable"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
