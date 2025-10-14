@@ -12,12 +12,14 @@ import (
 func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	userRepo := repository.NewUserRepository(db)
 	userService := service.NewUserService(userRepo)
+	sseService := service.NewSSEService(userService)
 	userHandler := controllers.NewUserHandler(userService)
-
+	sseHandler := controllers.NewSSEController(sseService) // 新开的SSE服务
 	publicAPI := r.Group("/api")
 	{
 		publicAPI.POST("/register", userHandler.Register)
 		publicAPI.POST("/login", userHandler.Login)
+
 	}
 
 	// 受保护路由组（需认证）
@@ -26,5 +28,6 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 		protectedAPI.POST("/logout", userHandler.Logout)
 		protectedAPI.PUT("/update", userHandler.Update)
 		protectedAPI.PUT("/modify", userHandler.ModifyPW)
+		publicAPI.GET("/sse", sseHandler.SSEHandler) // SSE传输数据
 	}
 }

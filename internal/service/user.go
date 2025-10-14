@@ -147,3 +147,8 @@ func (s *UserService) ModifyPassword(id uint, oldPassword, newPassword string) e
 
 	return nil
 }
+
+// 暴露出去，供同目录的sse.go使用
+func (s *UserService) GetUserByID(id uint) (*model.User, error) {
+	return s.repo.GetUserByID(id)
+}
