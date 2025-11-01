@@ -28,7 +28,6 @@ func (sc *SSEController) SSEHandler(c *gin.Context) {
 	// 从服务层获取数据通道
 	dataCh := sc.sseService.GenerateRandomSSEData(ctx)
 
-	// 手动循环处理通道数据（替换 c.Stream）
 	for {
 		select {
 		case data, ok := <-dataCh:
