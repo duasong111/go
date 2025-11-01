@@ -10,7 +10,8 @@ import (
 )
 
 func main() {
-	dsn := "host=192.168.1.6 user=postgres dbname=intellicamera port=5432 password=gsm200818534 sslmode=disable"
+	dsn := "host=43.136.37.113 user=admin dbname=pg_go port=5432 password=PGPass123! sslmode=disable"
+	// dsn := "host=192.168.1.88 user=postgres dbname=intellicamera port=5432 password=gsm200818534 sslmode=disable"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		panic("数据库连接失败: " + err.Error())
