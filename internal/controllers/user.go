@@ -3,7 +3,6 @@ package controllers
 import (
 	"awesomeProject/internal/service"
 	"awesomeProject/pkg"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -48,7 +47,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 		pkg.ErrorResponse(c, http.StatusBadRequest, "参数错误")
 		return
 	}
-	fmt.Print("Username", req.Username, req.Password)
+
 	user, token, err := h.userService.Login(req.Username, req.Password)
 	if err != nil {
 		pkg.ErrorResponse(c, http.StatusUnauthorized, err.Error())

@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	dsn := "host=43.136.37.113 user=admin dbname=pg_go port=5432 password=PGPass123! sslmode=disable"
+	dsn := "host=60.205.140.163 user=admin dbname=go_pg port=5432 password=password_pg sslmode=disable"
 	// dsn := "host=192.168.1.88 user=postgres dbname=intellicamera port=5432 password=gsm200818534 sslmode=disable"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -22,7 +22,7 @@ func main() {
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{ // 解决了跨域问题
-		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:8080"},
+		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:8000"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},

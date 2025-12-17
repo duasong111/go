@@ -24,12 +24,3 @@ func RightResponse(c *gin.Context, data interface{}, message string) {
 }
 
 // 数据返回失败
-
-func ErrorResponse(c *gin.Context, statusCode int, message string) {
-	c.JSON(statusCode, Response{
-		StatusCode: statusCode,
-		Message:    message,
-		Success:    false,
-		Data:       nil,
-	})
-}

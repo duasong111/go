@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"github.com/gin-gonic/gin"
 	"log"
 	"net"
 	"os"
@@ -31,4 +32,16 @@ func Info(message string, detail net.Interface) {
 
 func Error(message string, detail net.Interface) {
 	LogDetail("ERROR", message, detail)
+}
+
+func ErrorResponse(c *gin.Context, status int, message string) {
+	LogDetail("ERROR", message, net.Interface{})
+
+	c.JSON(status, gin.H{
+		"code":    status,
+		"message": message,
+		"success": false,
+	})
+
+	c.Abort()
 }
