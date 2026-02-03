@@ -1,6 +1,5 @@
 package repository
 
-// 此处的目的是写那些sql语句的，然后返回给service去进行处理
 import (
 	"awesomeProject/internal/model"
 	"errors"

@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-// 此处的目的是调用sql语句的
-
 type UserService struct {
 	repo *repository.UserRepository
 }
