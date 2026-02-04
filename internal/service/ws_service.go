@@ -106,10 +106,7 @@ func BroadcastToWS(topic string, payload string) {
 	}
 
 	Hub.broadcast <- data
-	//logger.Debugf("Broadcasted to WS: %s", string(data))
 }
-
-// 下面是客户端的读写 goroutine
 
 // ReadPump 读取客户端消息（目前只处理 pong，防止超时）
 func (c *WsClient) ReadPump() {

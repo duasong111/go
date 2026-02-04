@@ -21,7 +21,7 @@ func main() {
 	if err := db.AutoMigrate(&model.User{}); err != nil {
 		panic("表迁移失败: " + err.Error())
 	}
-
+	go service.Hub.Run()
 	if err := service.InitMQTT(); err != nil {
 		log.Fatalf("MQTT 初始化失败: %v", err)
 	}
@@ -41,5 +41,6 @@ func main() {
 		time.Sleep(3 * time.Second)
 		service.BroadcastToWS("test/topic", `{"message": "hello from server"}`)
 	}()
+
 	r.Run("0.0.0.0:8000")
 }
