@@ -28,8 +28,8 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 		protectedAPI.POST("/logout", userHandler.Logout)
 		protectedAPI.PUT("/update", userHandler.Update)
 		protectedAPI.PUT("/modify", userHandler.ModifyPW)
-		// SSE 订阅接口（需认证，树莓派带 token）
-		protectedAPI.GET("/sse", sseHandler.SSEHandler)
+		publicAPI.GET("/sse", sseHandler.SSEHandler) // SSE传输数据
+		r.GET("/ws", controllers.WsHandler)          // ws连接
 
 	}
 }
