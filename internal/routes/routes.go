@@ -29,5 +29,7 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 		protectedAPI.PUT("/update", userHandler.Update)
 		protectedAPI.PUT("/modify", userHandler.ModifyPW)
 		publicAPI.GET("/sse", sseHandler.SSEHandler) // SSE传输数据
+		r.GET("/ws", controllers.WsHandler)          // ws连接
+
 	}
 }

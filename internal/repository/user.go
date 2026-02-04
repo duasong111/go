@@ -25,12 +25,15 @@ func (r *UserRepository) CreateUser(user *model.User) error {
 // GetUserByUsername --> 获取用户信息
 
 func (r *UserRepository) GetUserByUsername(username string) (*model.User, error) {
-	var user model.User
-	err := r.db.Where("username = ?", username).First(&user).Error
+	var u model.User
+	err := r.db.Where("username = ?", username).First(&u).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, errors.New("用户不存在")
+		return nil, nil
 	}
-	return &user, err
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
 }
 
 // 更新用户信息
