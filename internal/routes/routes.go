@@ -28,8 +28,10 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 		protectedAPI.POST("/logout", userHandler.Logout)
 		protectedAPI.PUT("/update", userHandler.Update)
 		protectedAPI.PUT("/modify", userHandler.ModifyPW)
-		publicAPI.GET("/sse", sseHandler.SSEHandler) // SSE传输数据
-		r.GET("/esp32/data", controllers.WsHandler)  // ws连接
+		publicAPI.GET("/sse", sseHandler.SSEHandler)                      // SSE传输数据
+		r.GET("/esp32/data", controllers.WsHandler)                       // ws连接
+		publicAPI.POST("/device/rgb", controllers.ControlLed)             // 控制RGB小灯
+		publicAPI.POST("/device/screen/text", controllers.SendScreenText) // 控制屏幕文字
 
 	}
 }

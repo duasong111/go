@@ -17,10 +17,10 @@ var (
 )
 
 type SensorData struct {
-	Time        string  `json:"time"`
-	Temperature float64 `json:"temperature"`
-	Humidity    float64 `json:"humidity"`
-	Distance    float64 `json:"distance"`
+	Time        string      `json:"time"`
+	Temperature float64     `json:"temperature"`
+	Humidity    float64     `json:"humidity"`
+	Distance    interface{} `json:"distance"`
 	// 如果后续有更多字段，可以继续加
 }
 

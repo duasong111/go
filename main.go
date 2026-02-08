@@ -42,5 +42,5 @@ func main() {
 		service.BroadcastToWS("test/topic", `{"message": "hello from server"}`)
 	}()
 
-	r.Run("0.0.0.0:8001")
+	r.Run("0.0.0.0:8000")
 }
