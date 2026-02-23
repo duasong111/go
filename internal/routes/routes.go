@@ -28,10 +28,12 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 		protectedAPI.POST("/logout", userHandler.Logout)
 		protectedAPI.PUT("/update", userHandler.Update)
 		protectedAPI.PUT("/modify", userHandler.ModifyPW)
-		publicAPI.GET("/sse", sseHandler.SSEHandler)                      // SSE传输数据
-		r.GET("/esp32/data", controllers.WsHandler)                       // ws连接
-		publicAPI.POST("/device/rgb", controllers.ControlLed)             // 控制RGB小灯
-		publicAPI.POST("/device/screen/text", controllers.SendScreenText) // 控制屏幕文字
-
+		publicAPI.GET("/sse", sseHandler.SSEHandler)                                   // SSE传输数据
+		r.GET("/esp32/data", controllers.WsHandler)                                    // ws连接
+		publicAPI.POST("/device/rgb", controllers.ControlLed)                          // 控制RGB小灯
+		publicAPI.POST("/device/screen/text", controllers.SendScreenText)              // 控制屏幕文字
+		publicAPI.POST("/device/screen/image", controllers.UploadAndSendImage)         // 上传图片
+		publicAPI.POST("/device/screen/image_url", controllers.SendScreenImageFromUrl) //使用图片的url
+		publicAPI.POST("/device/buzzer", controllers.ControlBuzzer)                    // 蜂鸣器
 	}
 }
