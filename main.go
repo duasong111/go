@@ -2,6 +2,7 @@ package main
 
 import (
 	"awesomeProject/internal/model"
+	"awesomeProject/internal/redis"
 	"awesomeProject/internal/routes"
 	"awesomeProject/internal/service"
 	"github.com/gin-contrib/cors"
@@ -21,6 +22,7 @@ func main() {
 	if err := db.AutoMigrate(&model.User{}); err != nil {
 		panic("表迁移失败: " + err.Error())
 	}
+	redis.InitRedis()
 	go service.Hub.Run()
 	if err := service.InitMQTT(); err != nil {
 		log.Fatalf("MQTT 初始化失败: %v", err)

@@ -35,5 +35,6 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 		publicAPI.POST("/device/screen/image", controllers.UploadAndSendImage)         // 上传图片
 		publicAPI.POST("/device/screen/image_url", controllers.SendScreenImageFromUrl) //使用图片的url
 		publicAPI.POST("/device/buzzer", controllers.ControlBuzzer)                    // 蜂鸣器
+		publicAPI.POST("/device/bark_alert", controllers.ControlBuzzer)
 	}
 }
