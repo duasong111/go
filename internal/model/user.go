@@ -51,3 +51,16 @@ type Threshold struct {
 	UpdatedAt     time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
 }
+
+// 距离监测阈值表（独立表，用于近距离报警）
+type DistanceThreshold struct {
+	ID            uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID        uint           `gorm:"index;not null" json:"user_id"`
+	DeviceID      string         `gorm:"size:64;index" json:"device_id"` // 设备标识
+	DistanceMin   *float64       `json:"distance_min,omitempty"`         // 距离下限（小于此值报警），null 表示不监控
+	AlertInterval int            `gorm:"default:300" json:"alert_interval"` // 报警间隔秒数，默认5分钟
+	IsActive      bool           `gorm:"default:true" json:"is_active"` // 是否启用
+	CreatedAt     time.Time      `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt     time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
+	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
+}
