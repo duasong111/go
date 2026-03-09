@@ -12,8 +12,8 @@ var Client *redis.Client
 
 func InitRedis() {
 	Client = redis.NewClient(&redis.Options{
-		Addr:     "60.205.140.163:6379",
-		Password: "redis_kwRBim",
+		Addr:     "192.168.18.204:6379",
+		Password: "gsm200818534",
 		DB:       0,
 
 		DialTimeout:  5 * time.Second,

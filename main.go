@@ -5,21 +5,23 @@ import (
 	"awesomeProject/internal/redis"
 	"awesomeProject/internal/routes"
 	"awesomeProject/internal/service"
+	"log"
+	"time"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"log"
-	"time"
 )
 
 func main() {
-	dsn := "host=60.205.140.163 user=user_yrh7kC dbname=go_pg port=5432 password=password_asY8fN sslmode=disable"
+	dsn := "host=192.168.18.204 user=postgres dbname=postgres port=5432 password=gsm200818534 sslmode=disable"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		panic("数据库连接失败: " + err.Error())
 	}
-	if err := db.AutoMigrate(&model.User{}); err != nil {
+	model.InitDB(db)
+	if err := db.AutoMigrate(&model.User{}, &model.BarkToken{}, &model.Threshold{}, &model.DistanceThreshold{}); err != nil {
 		panic("表迁移失败: " + err.Error())
 	}
 	redis.InitRedis()
@@ -28,6 +30,12 @@ func main() {
 		log.Fatalf("MQTT 初始化失败: %v", err)
 	}
 	r := gin.Default()
+
+	// 设置可信代理，解决 Gin 警告
+	err = r.SetTrustedProxies([]string{"192.168.18.0/24", "127.0.0.1"})
+	if err != nil {
+		log.Printf("设置可信代理失败: %v", err)
+	}
 
 	r.Use(cors.New(cors.Config{ // 解决了跨域问题
 		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:8080"},
