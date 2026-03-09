@@ -46,7 +46,8 @@ type Threshold struct {
 	TempMin       *float64       `json:"temp_min,omitempty"`
 	HumidityMax   *float64       `json:"humidity_max,omitempty"`
 	HumidityMin   *float64       `json:"humidity_min,omitempty"`
-	AlertInterval int            `gorm:"default:100" json:"alert_interval"` // 报警间隔秒数，默认5分钟防抖
+	AlertInterval int            `gorm:"default:300" json:"alert_interval"` // 报警间隔秒数，默认5分钟防抖
+	IsActive      bool           `gorm:"default:true" json:"is_active"`    // 是否启用
 	CreatedAt     time.Time      `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt     time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
