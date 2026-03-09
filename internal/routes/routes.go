@@ -29,8 +29,10 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 		protectedAPI.POST("/logout", userHandler.Logout)
 		protectedAPI.PUT("/update", userHandler.Update)
 		protectedAPI.PUT("/modify", userHandler.ModifyPW)
-		protectedAPI.POST("/device/accept_threshold", controllers.AcceptThreshold)  // 接收阈值
-		protectedAPI.POST("/device/accept_bark_token", controllers.AcceptBarkToken) // 接收用户的token
+		protectedAPI.POST("/device/accept_threshold", controllers.AcceptThreshold)                  // 接收阈值
+		protectedAPI.POST("/device/accept_bark_token", controllers.AcceptBarkToken)                 // 接收用户的token
+		protectedAPI.POST("/device/manage_threshold", controllers.ManageThreshold)                  // 升级版：管理温湿度阈值
+		protectedAPI.POST("/device/manage_distance_threshold", controllers.ManageDistanceThreshold) // 升级版：管理距离阈值
 	}
 
 	publicAPI.GET("/sse", sseHandler.SSEHandler)                                   // SSE传输数据

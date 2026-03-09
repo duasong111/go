@@ -15,6 +15,19 @@ type ThresholdRequest struct {
 	IsActive     bool     `json:"is_active,omitempty"`          // 是否启用，默认 true
 }
 
+// 阈值查询和修改请求（升级版）
+type ThresholdManageRequest struct {
+	DeviceID     string  `json:"device_id" binding:"required"` // 设备唯一标识
+	TempMax      *float64 `json:"temp_max,omitempty"`       // 温度上限，null = 不监控
+	TempMin      *float64 `json:"temp_min,omitempty"`       // 温度下限
+	HumidityMax  *float64 `json:"humidity_max,omitempty"`   // 湿度上限
+	HumidityMin  *float64 `json:"humidity_min,omitempty"`   // 湿度下限
+	AlertSeconds int     `json:"alert_seconds,omitempty"`    // 报警最小间隔秒数，默认 300（5分钟）
+	IsActive     bool    `json:"is_active,omitempty"`     // 是否启用，默认 true
+	AlertAction  string  `json:"alert_action,omitempty"`  // 报警行为：buzzer(蜂鸣器), led(灯), both(两者)
+	LedColor     string  `json:"led_color,omitempty"`     // LED灯颜色：red, blue, yellow, white
+}
+
 type DeviceAlertRequest struct {
 	DeviceID    string  `json:"device_id" binding:"required"`
 	Temperature float64 `json:"temperature"`
@@ -23,10 +36,20 @@ type DeviceAlertRequest struct {
 
 // 距离阈值设置请求
 type DistanceThresholdRequest struct {
-	DeviceID     string   `json:"device_id" binding:"required"` // 设备唯一标识
+	DeviceID     string  `json:"device_id" binding:"required"` // 设备唯一标识
 	DistanceMin  *float64 `json:"distance_min"`                 // 距离下限（小于此值报警），null = 不监控
-	AlertSeconds int      `json:"alert_seconds,omitempty"`      // 报警最小间隔秒数，默认 300（5分钟）
-	IsActive     bool     `json:"is_active,omitempty"`          // 是否启用，默认 true
+	AlertSeconds int     `json:"alert_seconds,omitempty"`      // 报警最小间隔秒数，默认 300（5分钟）
+	IsActive     bool    `json:"is_active,omitempty"`     // 是否启用，默认 true
+}
+
+// 距离阈值查询和修改请求（升级版）
+type DistanceThresholdManageRequest struct {
+	DeviceID     string  `json:"device_id" binding:"required"` // 设备唯一标识
+	DistanceMin  *float64 `json:"distance_min,omitempty"`     // 距离下限（小于此值报警），null = 不监控
+	AlertSeconds int     `json:"alert_seconds,omitempty"`  // 报警最小间隔秒数，默认 300（5分钟）
+	IsActive     bool    `json:"is_active,omitempty"`     // 是否启用，默认 true
+	AlertAction  string  `json:"alert_action,omitempty"`  // 报警行为：buzzer(蜂鸣器), led(灯), both(两者)
+	LedColor     string  `json:"led_color,omitempty"`     // LED灯颜色：red, blue, yellow, white
 }
 
 // 距离上报请求

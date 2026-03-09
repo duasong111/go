@@ -508,7 +508,6 @@ func SensorData(c *gin.Context) {
 
 // 处理温湿度报警（内部函数）
 func processTempHumidityAlert(deviceID string, temperature, humidity float64) {
-	//log.Printf("[processTempHumidityAlert] 开始处理: device_id=%s, temperature=%.2f, humidity=%.2f", deviceID, temperature, humidity)
 
 	// 查找该设备的阈值配置
 	var threshold model.Threshold
@@ -585,6 +584,9 @@ func processTempHumidityAlert(deviceID string, temperature, humidity float64) {
 		if resp.StatusCode == http.StatusOK {
 			//log.Printf("[processTempHumidityAlert] Bark推送成功: device_id=%s", deviceID)
 		}
+
+		// 根据配置的报警行为触发设备
+		triggerDeviceByAlertAction(deviceID, threshold.AlertAction, threshold.LedColor)
 	}()
 }
 
@@ -653,7 +655,264 @@ func processDistanceAlert(deviceID string, distance float64) {
 		if resp.StatusCode == http.StatusOK {
 			//log.Printf("[processDistanceAlert] Bark推送成功: device_id=%s", deviceID)
 		}
+
+		// 根据配置的报警行为触发设备
+		triggerDeviceByAlertAction(deviceID, threshold.AlertAction, threshold.LedColor)
 	}()
+}
+
+// 7. 升级版阈值管理接口（查询、修改、配置报警行为）
+func ManageThreshold(c *gin.Context) {
+	var req pkg.ThresholdManageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "参数格式错误：" + err.Error(),
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "请先登录",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	// 查询现有阈值
+	var threshold model.Threshold
+	result := model.DB.Where("user_id = ? AND device_id = ?", userID, req.DeviceID).First(&threshold)
+
+	if result.Error != nil {
+		// 创建新记录
+		if req.AlertSeconds <= 0 {
+			req.AlertSeconds = 300
+		}
+		if req.AlertAction == "" {
+			req.AlertAction = "buzzer"
+		}
+		if req.LedColor == "" {
+			req.LedColor = "red"
+		}
+
+		threshold = model.Threshold{
+			UserID:        userID,
+			DeviceID:      req.DeviceID,
+			TempMax:       req.TempMax,
+			TempMin:       req.TempMin,
+			HumidityMax:   req.HumidityMax,
+			HumidityMin:   req.HumidityMin,
+			AlertInterval: req.AlertSeconds,
+			IsActive:      req.IsActive,
+			AlertAction:   req.AlertAction,
+			LedColor:      req.LedColor,
+		}
+		if err := model.DB.Create(&threshold).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    500,
+				"message": "创建阈值失败：" + err.Error(),
+			})
+			return
+		}
+	} else {
+		// 更新现有记录
+		updates := map[string]interface{}{}
+		if req.TempMax != nil {
+			updates["temp_max"] = req.TempMax
+		}
+		if req.TempMin != nil {
+			updates["temp_min"] = req.TempMin
+		}
+		if req.HumidityMax != nil {
+			updates["humidity_max"] = req.HumidityMax
+		}
+		if req.HumidityMin != nil {
+			updates["humidity_min"] = req.HumidityMin
+		}
+		if req.AlertSeconds > 0 {
+			updates["alert_interval"] = req.AlertSeconds
+		}
+		updates["is_active"] = req.IsActive
+		if req.AlertAction != "" {
+			updates["alert_action"] = req.AlertAction
+		}
+		if req.LedColor != "" {
+			updates["led_color"] = req.LedColor
+		}
+
+		if err := model.DB.Model(&threshold).Updates(updates).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    500,
+				"message": "更新阈值失败：" + err.Error(),
+			})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "阈值配置已保存",
+		"data": gin.H{
+			"device_id":      req.DeviceID,
+			"temp_max":       threshold.TempMax,
+			"temp_min":       threshold.TempMin,
+			"humidity_max":   threshold.HumidityMax,
+			"humidity_min":   threshold.HumidityMin,
+			"alert_interval": threshold.AlertInterval,
+			"is_active":      threshold.IsActive,
+			"alert_action":   threshold.AlertAction,
+			"led_color":      threshold.LedColor,
+		},
+	})
+}
+
+// 8. 升级版距离阈值管理接口（查询、修改、配置报警行为）
+func ManageDistanceThreshold(c *gin.Context) {
+	var req pkg.DistanceThresholdManageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "参数格式错误：" + err.Error(),
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "请先登录",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	// 查询现有阈值
+	var threshold model.DistanceThreshold
+	result := model.DB.Where("user_id = ? AND device_id = ?", userID, req.DeviceID).First(&threshold)
+
+	if result.Error != nil {
+		// 创建新记录
+		if req.AlertSeconds <= 0 {
+			req.AlertSeconds = 300
+		}
+		if req.AlertAction == "" {
+			req.AlertAction = "buzzer"
+		}
+		if req.LedColor == "" {
+			req.LedColor = "yellow"
+		}
+
+		threshold = model.DistanceThreshold{
+			UserID:        userID,
+			DeviceID:      req.DeviceID,
+			DistanceMin:   req.DistanceMin,
+			AlertInterval: req.AlertSeconds,
+			IsActive:      req.IsActive,
+			AlertAction:   req.AlertAction,
+			LedColor:      req.LedColor,
+		}
+		if err := model.DB.Create(&threshold).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    500,
+				"message": "创建距离阈值失败：" + err.Error(),
+			})
+			return
+		}
+	} else {
+		// 更新现有记录
+		updates := map[string]interface{}{}
+		if req.DistanceMin != nil {
+			updates["distance_min"] = req.DistanceMin
+		}
+		if req.AlertSeconds > 0 {
+			updates["alert_interval"] = req.AlertSeconds
+		}
+		updates["is_active"] = req.IsActive
+		if req.AlertAction != "" {
+			updates["alert_action"] = req.AlertAction
+		}
+		if req.LedColor != "" {
+			updates["led_color"] = req.LedColor
+		}
+
+		if err := model.DB.Model(&threshold).Updates(updates).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    500,
+				"message": "更新距离阈值失败：" + err.Error(),
+			})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "距离阈值配置已保存",
+		"data": gin.H{
+			"device_id":      req.DeviceID,
+			"distance_min":   threshold.DistanceMin,
+			"alert_interval": threshold.AlertInterval,
+			"is_active":      threshold.IsActive,
+			"alert_action":   threshold.AlertAction,
+			"led_color":      threshold.LedColor,
+		},
+	})
+}
+
+// 9. 根据配置的报警行为触发设备
+func triggerDeviceByAlertAction(deviceID string, alertAction string, ledColor string) {
+	switch alertAction {
+	case "buzzer":
+		// 只触发蜂鸣器
+		buzzerPayload := map[string]interface{}{
+			"type":      "buzzer",
+			"state":     "on",
+			"frequency": 2000,
+			"duration":  1000,
+			"cycles":    3,
+			"interval":  500,
+		}
+		service.Publish("control/esp32", 0, false, buzzerPayload)
+
+	case "led":
+		// 只触发LED灯
+		ledPayload := map[string]interface{}{
+			"state":      "on",
+			"color":      ledColor,
+			"brightness": 100,
+			"mode":       "blink",
+			"interval":   500,
+			"duration":   5000,
+		}
+		service.Publish("control/esp32", 0, false, ledPayload)
+
+	case "both":
+		// 同时触发蜂鸣器和LED灯
+		buzzerPayload := map[string]interface{}{
+			"type":      "buzzer",
+			"state":     "on",
+			"frequency": 2000,
+			"duration":  1000,
+			"cycles":    3,
+			"interval":  500,
+		}
+		service.Publish("control/esp32", 0, false, buzzerPayload)
+
+		ledPayload := map[string]interface{}{
+			"state":      "on",
+			"color":      ledColor,
+			"brightness": 100,
+			"mode":       "blink",
+			"interval":   500,
+			"duration":   5000,
+		}
+		service.Publish("control/esp32", 0, false, ledPayload)
+	}
 }
 
 // 统一设备控制接口

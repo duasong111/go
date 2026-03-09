@@ -1,8 +1,9 @@
 package model
 
 import (
-	"gorm.io/gorm"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 var DB *gorm.DB
@@ -46,8 +47,10 @@ type Threshold struct {
 	TempMin       *float64       `json:"temp_min,omitempty"`
 	HumidityMax   *float64       `json:"humidity_max,omitempty"`
 	HumidityMin   *float64       `json:"humidity_min,omitempty"`
-	AlertInterval int            `gorm:"default:300" json:"alert_interval"` // 报警间隔秒数，默认5分钟防抖
-	IsActive      bool           `gorm:"default:true" json:"is_active"`    // 是否启用
+	AlertInterval int            `gorm:"default:300" json:"alert_interval"`    // 报警间隔秒数，默认5分钟防抖
+	IsActive      bool           `gorm:"default:true" json:"is_active"`        // 是否启用
+	AlertAction   string         `gorm:"default:'buzzer'" json:"alert_action"` // 报警行为：buzzer(蜂鸣器), led(灯), both(两者)
+	LedColor      string         `gorm:"default:'red'" json:"led_color"`       // LED灯颜色：red, blue, yellow, white
 	CreatedAt     time.Time      `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt     time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
@@ -57,10 +60,12 @@ type Threshold struct {
 type DistanceThreshold struct {
 	ID            uint           `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID        uint           `gorm:"index;not null" json:"user_id"`
-	DeviceID      string         `gorm:"size:64;index" json:"device_id"` // 设备标识
-	DistanceMin   *float64       `json:"distance_min,omitempty"`         // 距离下限（小于此值报警），null 表示不监控
-	AlertInterval int            `gorm:"default:300" json:"alert_interval"` // 报警间隔秒数，默认5分钟
-	IsActive      bool           `gorm:"default:true" json:"is_active"` // 是否启用
+	DeviceID      string         `gorm:"size:64;index" json:"device_id"`       // 设备标识
+	DistanceMin   *float64       `json:"distance_min,omitempty"`               // 距离下限（小于此值报警），null 表示不监控
+	AlertInterval int            `gorm:"default:300" json:"alert_interval"`    // 报警间隔秒数，默认5分钟
+	IsActive      bool           `gorm:"default:true" json:"is_active"`        // 是否启用
+	AlertAction   string         `gorm:"default:'buzzer'" json:"alert_action"` // 报警行为：buzzer(蜂鸣器), led(灯), both(两者)
+	LedColor      string         `gorm:"default:'yellow'" json:"led_color"`    // LED灯颜色：red, blue, yellow, white
 	CreatedAt     time.Time      `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt     time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
