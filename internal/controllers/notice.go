@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -166,6 +167,11 @@ func AcceptThreshold(c *gin.Context) {
 			return
 		}
 	}
+
+	// 清除 Redis 缓存
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("threshold:%s", req.DeviceID)
+	redis.Client.Del(ctx, cacheKey)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
@@ -362,6 +368,10 @@ func AcceptDistanceThreshold(c *gin.Context) {
 			return
 		}
 	}
+	// 清除缓存
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("distance_threshold:%s", req.DeviceID)
+	redis.Client.Del(ctx, cacheKey)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
@@ -508,18 +518,42 @@ func SensorData(c *gin.Context) {
 
 // 处理温湿度报警（内部函数）
 func processTempHumidityAlert(deviceID string, temperature, humidity float64) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("threshold:%s", deviceID)
 
-	// 查找该设备的阈值配置
+	// 1. 先从 Redis 缓存获取阈值配置
 	var threshold model.Threshold
-	if err := model.DB.Where("device_id = ?", deviceID).First(&threshold).Error; err != nil {
-		// 未配置阈值，正常情况，不打印错误日志
-		return
-	}
-
-	// 检查是否启用
-	if !threshold.IsActive {
-		// 用户已禁用报警，正常情况，不打印错误日志
-		return
+	cached, err := redis.Client.Get(ctx, cacheKey).Result()
+	if err == nil {
+		// 缓存命中，反序列化
+		if err := json.Unmarshal([]byte(cached), &threshold); err == nil {
+			// 检查是否启用
+			if !threshold.IsActive {
+				return
+			}
+		} else {
+			// 反序列化失败，从数据库查询
+			if err := model.DB.Where("device_id = ?", deviceID).First(&threshold).Error; err != nil {
+				return
+			}
+			// 写入缓存
+			if data, err := json.Marshal(threshold); err == nil {
+				redis.Client.Set(ctx, cacheKey, data, 1*time.Hour)
+			}
+		}
+	} else {
+		// 缓存未命中，从数据库查询
+		if err := model.DB.Where("device_id = ?", deviceID).First(&threshold).Error; err != nil {
+			return
+		}
+		// 检查是否启用
+		if !threshold.IsActive {
+			return
+		}
+		// 写入缓存
+		if data, err := json.Marshal(threshold); err == nil {
+			redis.Client.Set(ctx, cacheKey, data, 1*time.Hour)
+		}
 	}
 
 	// 收集报警信息
@@ -547,7 +581,6 @@ func processTempHumidityAlert(deviceID string, temperature, humidity float64) {
 
 	// 防抖
 	cooldownKey := fmt.Sprintf("alert:cooldown:%s:%s", deviceID, alertMessage)
-	ctx := context.Background()
 	setOK, err := redis.Client.SetNX(ctx, cooldownKey, "1", time.Duration(threshold.AlertInterval)*time.Second).Result()
 	if err != nil {
 		//log.Printf("[processTempHumidityAlert] Redis错误: %v", err)
@@ -559,10 +592,30 @@ func processTempHumidityAlert(deviceID string, temperature, humidity float64) {
 	}
 
 	// 获取Bark Token并推送
+	barkTokenCacheKey := fmt.Sprintf("bark_token:%d", threshold.UserID)
 	var barkToken model.BarkToken
-	if err := model.DB.Where("user_id = ? AND is_active = true", threshold.UserID).First(&barkToken).Error; err != nil {
-		//log.Printf("[processTempHumidityAlert] 无可用Bark Token: user_id=%d", threshold.UserID)
-		return
+	cachedToken, err := redis.Client.Get(ctx, barkTokenCacheKey).Result()
+	if err == nil {
+		// 缓存命中，反序列化
+		if err := json.Unmarshal([]byte(cachedToken), &barkToken); err != nil {
+			// 反序列化失败，从数据库查询
+			if err := model.DB.Where("user_id = ? AND is_active = true", threshold.UserID).First(&barkToken).Error; err != nil {
+				return
+			}
+			// 写入缓存
+			if data, err := json.Marshal(barkToken); err == nil {
+				redis.Client.Set(ctx, barkTokenCacheKey, data, 1*time.Hour)
+			}
+		}
+	} else {
+		// 缓存未命中，从数据库查询
+		if err := model.DB.Where("user_id = ? AND is_active = true", threshold.UserID).First(&barkToken).Error; err != nil {
+			return
+		}
+		// 写入缓存
+		if data, err := json.Marshal(barkToken); err == nil {
+			redis.Client.Set(ctx, barkTokenCacheKey, data, 1*time.Hour)
+		}
 	}
 
 	// 异步推送
@@ -592,19 +645,42 @@ func processTempHumidityAlert(deviceID string, temperature, humidity float64) {
 
 // 处理距离报警（内部函数）
 func processDistanceAlert(deviceID string, distance float64) {
-	//log.Printf("[processDistanceAlert] 开始处理: device_id=%s, distance=%.2f", deviceID, distance)
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("distance_threshold:%s", deviceID)
 
-	// 查找该设备的距离阈值配置
+	// 1. 先从 Redis 缓存获取距离阈值配置
 	var threshold model.DistanceThreshold
-	if err := model.DB.Where("device_id = ?", deviceID).First(&threshold).Error; err != nil {
-		// 未配置距离阈值，正常情况，不打印错误日志
-		return
-	}
-
-	// 检查是否启用
-	if !threshold.IsActive {
-		// 用户已禁用报警，正常情况，不打印错误日志
-		return
+	cached, err := redis.Client.Get(ctx, cacheKey).Result()
+	if err == nil {
+		// 缓存命中，反序列化
+		if err := json.Unmarshal([]byte(cached), &threshold); err == nil {
+			// 检查是否启用
+			if !threshold.IsActive {
+				return
+			}
+		} else {
+			// 反序列化失败，从数据库查询
+			if err := model.DB.Where("device_id = ?", deviceID).First(&threshold).Error; err != nil {
+				return
+			}
+			// 写入缓存
+			if data, err := json.Marshal(threshold); err == nil {
+				redis.Client.Set(ctx, cacheKey, data, 1*time.Hour)
+			}
+		}
+	} else {
+		// 缓存未命中，从数据库查询
+		if err := model.DB.Where("device_id = ?", deviceID).First(&threshold).Error; err != nil {
+			return
+		}
+		// 检查是否启用
+		if !threshold.IsActive {
+			return
+		}
+		// 写入缓存
+		if data, err := json.Marshal(threshold); err == nil {
+			redis.Client.Set(ctx, cacheKey, data, 1*time.Hour)
+		}
 	}
 
 	// 判断是否触发报警
@@ -618,7 +694,6 @@ func processDistanceAlert(deviceID string, distance float64) {
 
 	// 防抖
 	cooldownKey := fmt.Sprintf("distance_alert:cooldown:%s:%s", deviceID, alertMessage)
-	ctx := context.Background()
 	setOK, err := redis.Client.SetNX(ctx, cooldownKey, "1", time.Duration(threshold.AlertInterval)*time.Second).Result()
 	if err != nil {
 		//log.Printf("[processDistanceAlert] Redis错误: %v", err)
@@ -752,6 +827,11 @@ func ManageThreshold(c *gin.Context) {
 			return
 		}
 	}
+
+	// 清除 Redis 缓存
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("threshold:%s", req.DeviceID)
+	redis.Client.Del(ctx, cacheKey)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
