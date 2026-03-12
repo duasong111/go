@@ -5,6 +5,7 @@ import (
 	"awesomeProject/internal/redis"
 	"awesomeProject/internal/routes"
 	"awesomeProject/internal/service"
+	"awesomeProject/internal/service/rabbitmq"
 	"log"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 )
 
 func main() {
-	dsn := "host=192.168.18.204 user=postgres dbname=postgres port=5432 password=gsm200818534 sslmode=disable"
+	dsn := "host=10.1.1.136 user=postgres dbname=postgres port=5432 password=gsm200818534 sslmode=disable"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		panic("数据库连接失败: " + err.Error())
@@ -29,6 +30,16 @@ func main() {
 	if err := service.InitMQTT(); err != nil {
 		log.Fatalf("MQTT 初始化失败: %v", err)
 	}
+	// 初始化 RabbitMQ 连接
+	if err := rabbitmq.Init("60.205.140.163", "rabbitmq", "rabbitmq"); err != nil {
+		log.Printf("RabbitMQ 初始化失败: %v", err)
+		// 非致命，继续运行（视业务决定是否要 panic）
+	} else {
+		// 初始化成功 → 启动消费者（常驻）
+		go rabbitmq.StartSensorDataConsumer()
+		log.Println("RabbitMQ 消费者已启动")
+	}
+
 	r := gin.Default()
 
 	// 设置可信代理，解决 Gin 警告

@@ -15,7 +15,7 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	userService := service.NewUserService(userRepo)
 	sseService := service.NewSSEService(userService)
 	userHandler := controllers.NewUserHandler(userService)
-	sseHandler := controllers.NewSSEController(sseService) // 新开的SSE服务
+	sseHandler := controllers.NewSSEController(sseService)
 	publicAPI := r.Group("/api")
 	{
 		publicAPI.POST("/register", userHandler.Register)
@@ -26,7 +26,7 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	protectedAPI := r.Group("/api").Use(middleware.AuthMiddleware())
 	{
 		protectedAPI.POST("/logout", userHandler.Logout)
-		protectedAPI.GET("/user/info", userHandler.GetUserInfo)      // 获取用户信息
+		protectedAPI.GET("/user/info", userHandler.GetUserInfo) // 获取用户信息
 		protectedAPI.PUT("/update", userHandler.Update)
 		protectedAPI.PUT("/modify", userHandler.ModifyPW)
 		protectedAPI.POST("/device/accept_threshold", controllers.AcceptThreshold)                  // 接收阈值

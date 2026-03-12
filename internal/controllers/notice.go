@@ -13,6 +13,7 @@ import (
 	"awesomeProject/internal/model"
 	"awesomeProject/internal/redis"
 	"awesomeProject/internal/service"
+	"awesomeProject/internal/service/rabbitmq"
 	"awesomeProject/pkg"
 
 	"github.com/gin-gonic/gin"
@@ -483,19 +484,28 @@ func SensorData(c *gin.Context) {
 		})
 		return
 	}
+
+	// 发送数据到 RabbitMQ
+	go func() {
+		err := rabbitmq.Publish("sensor_data", "sensor_data", req)
+		if err != nil {
+			log.Printf("[SensorData] 发送到 RabbitMQ 失败: %v", err)
+		}
+	}()
+
 	// 创建通道来接收两个处理结果
 	tempHumidityDone := make(chan bool, 1)
 	distanceDone := make(chan bool, 1)
 
 	// 异步处理温湿度报警
 	go func() {
-		processTempHumidityAlert(req.DeviceID, req.Temperature, req.Humidity)
+		ProcessTempHumidityAlert(req.DeviceID, req.Temperature, req.Humidity)
 		tempHumidityDone <- true
 	}()
 
 	// 异步处理距离报警
 	go func() {
-		processDistanceAlert(req.DeviceID, req.Distance)
+		ProcessDistanceAlert(req.DeviceID, req.Distance)
 		distanceDone <- true
 	}()
 
@@ -517,7 +527,7 @@ func SensorData(c *gin.Context) {
 }
 
 // 处理温湿度报警（内部函数）
-func processTempHumidityAlert(deviceID string, temperature, humidity float64) {
+func ProcessTempHumidityAlert(deviceID string, temperature, humidity float64) {
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("threshold:%s", deviceID)
 
@@ -644,7 +654,7 @@ func processTempHumidityAlert(deviceID string, temperature, humidity float64) {
 }
 
 // 处理距离报警（内部函数）
-func processDistanceAlert(deviceID string, distance float64) {
+func ProcessDistanceAlert(deviceID string, distance float64) {
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("distance_threshold:%s", deviceID)
 
