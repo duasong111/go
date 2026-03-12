@@ -20,13 +20,13 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	{
 		publicAPI.POST("/register", userHandler.Register)
 		publicAPI.POST("/login", userHandler.Login)
-
 	}
 
 	// 受保护路由组（需认证）- 用户操作
 	protectedAPI := r.Group("/api").Use(middleware.AuthMiddleware())
 	{
 		protectedAPI.POST("/logout", userHandler.Logout)
+		protectedAPI.GET("/user/info", userHandler.GetUserInfo)      // 获取用户信息
 		protectedAPI.PUT("/update", userHandler.Update)
 		protectedAPI.PUT("/modify", userHandler.ModifyPW)
 		protectedAPI.POST("/device/accept_threshold", controllers.AcceptThreshold)                  // 接收阈值

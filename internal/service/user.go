@@ -2,13 +2,18 @@ package service
 
 import (
 	"awesomeProject/internal/model"
+	"awesomeProject/internal/redis"
 	"awesomeProject/internal/repository"
+	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"time"
+
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
-	"os"
-	"time"
 )
 
 type UserService struct {
@@ -87,13 +92,30 @@ func (s *UserService) Logout(userID uint) error {
 // 用户信息更新服务
 
 func (s *UserService) UpdateUser(id uint, updates map[string]interface{}) (*model.User, error) {
-	// 检查用户是否存在
-	user, err := s.repo.GetUserByID(id)
-	if err != nil {
-		return nil, err
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("user:%d", id)
+
+	// 1. 先从缓存获取用户信息
+	var user *model.User
+	cached, err := redis.Client.Get(ctx, cacheKey).Result()
+	if err == nil {
+		// 缓存命中，反序列化
+		if err := json.Unmarshal([]byte(cached), &user); err != nil {
+			// 反序列化失败，从数据库查询
+			user, err = s.repo.GetUserByID(id)
+			if err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		// 缓存未命中，从数据库查询
+		user, err = s.repo.GetUserByID(id)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// 验证唯一性字段（Email 和 Phone）
+	// 2. 验证唯一性字段（Email 和 Phone）
 	if email, ok := updates["email"].(string); ok && email != "" && email != user.Email {
 		existing, err := s.repo.GetUserByEmail(email) // 需添加 GetUserByEmail 方法
 		if err == nil && existing != nil {
@@ -107,46 +129,112 @@ func (s *UserService) UpdateUser(id uint, updates map[string]interface{}) (*mode
 		}
 	}
 
-	// 执行更新
+	// 3. 执行更新
 	if err := s.repo.UpdateUser(id, updates); err != nil {
 		return nil, err
 	}
 
-	// 返回更新后的用户
+	// 4. 清除缓存
+	redis.Client.Del(ctx, cacheKey)
+
+	// 5. 返回更新后的用户
 	updatedUser, err := s.repo.GetUserByID(id)
 	if err != nil {
 		return nil, err
 	}
+
+	// 6. 将更新后的用户信息写入缓存
+	if data, err := json.Marshal(updatedUser); err == nil {
+		redis.Client.Set(ctx, cacheKey, data, 1*time.Hour)
+	}
+
 	return updatedUser, nil
+}
+
+// 获取用户信息服务
+
+func (s *UserService) GetUserByID(id uint) (*model.User, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("user:%d", id)
+
+	// 1. 先从缓存获取用户信息
+	var user *model.User
+	cached, err := redis.Client.Get(ctx, cacheKey).Result()
+	if err == nil {
+		// 缓存命中，反序列化
+		if err := json.Unmarshal([]byte(cached), &user); err != nil {
+			// 反序列化失败，从数据库查询
+			user, err = s.repo.GetUserByID(id)
+			if err != nil {
+				return nil, err
+			}
+			// 写入缓存
+			if data, err := json.Marshal(user); err == nil {
+				redis.Client.Set(ctx, cacheKey, data, 1*time.Hour)
+			}
+		}
+	} else {
+		// 缓存未命中，从数据库查询
+		user, err = s.repo.GetUserByID(id)
+		if err != nil {
+			return nil, err
+		}
+		// 写入缓存
+		if data, err := json.Marshal(user); err == nil {
+			redis.Client.Set(ctx, cacheKey, data, 1*time.Hour)
+		}
+	}
+
+	return user, nil
 }
 
 // 用户密码修改服务
 
 func (s *UserService) ModifyPassword(id uint, oldPassword, newPassword string) error {
-	// 查询用户
-	user, err := s.repo.GetUserByID(id)
-	if err != nil {
-		return err
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("user:%d", id)
+
+	// 1. 查询用户（先从缓存获取）
+	var user *model.User
+	cached, err := redis.Client.Get(ctx, cacheKey).Result()
+	if err == nil {
+		// 缓存命中，反序列化
+		if err := json.Unmarshal([]byte(cached), &user); err != nil {
+			// 反序列化失败，从数据库查询
+			user, err = s.repo.GetUserByID(id)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		// 缓存未命中，从数据库查询
+		user, err = s.repo.GetUserByID(id)
+		if err != nil {
+			return err
+		}
 	}
 
-	// 验证旧密码
+	// 2. 验证旧密码
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword)); err != nil {
 		return errors.New("旧密码错误")
 	}
-	// 哈希新密码
+	// 3. 哈希新密码
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-	// 更新密码
+	// 4. 更新密码
 	if err := s.repo.UpdateUserPassword(id, string(hashedPassword)); err != nil {
 		return err
 	}
+
+	// 5. 清除缓存
+	redis.Client.Del(ctx, cacheKey)
 
 	return nil
 }
 
 // 暴露出去，供同目录的sse.go使用
-func (s *UserService) GetUserByID(id uint) (*model.User, error) {
-	return s.repo.GetUserByID(id)
-}
+// func (s *UserService) GetUserByID(id uint) (*model.User, error) {
+// 	return s.repo.GetUserByID(id)
+// }

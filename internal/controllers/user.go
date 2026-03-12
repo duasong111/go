@@ -120,6 +120,31 @@ func (h *UserHandler) Update(c *gin.Context) {
 	}, "更新成功")
 }
 
+func (h *UserHandler) GetUserInfo(c *gin.Context) {
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		pkg.ErrorResponse(c, http.StatusUnauthorized, "未认证用户")
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	user, err := h.userService.GetUserByID(userID)
+	if err != nil {
+		pkg.ErrorResponse(c, http.StatusNotFound, "用户不存在")
+		return
+	}
+
+	pkg.RightResponse(c, gin.H{
+		"user_id":   user.ID,
+		"username":  user.Username,
+		"email":     user.Email,
+		"address":   user.Address,
+		"phone":     user.Phone,
+		"education": user.Education,
+		"avatar":    user.Avatar,
+	}, "获取成功")
+}
+
 func (h *UserHandler) ModifyPW(c *gin.Context) {
 	userIDFloat, exists := c.Get("user_id")
 	if !exists {
