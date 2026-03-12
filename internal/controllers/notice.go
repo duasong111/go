@@ -487,7 +487,7 @@ func SensorData(c *gin.Context) {
 
 	// 发送数据到 RabbitMQ
 	go func() {
-		err := rabbitmq.Publish("sensor_data", "sensor_data", req)
+		err := rabbitmq.Publish("sensor_data", "sensor_data_key", req)
 		if err != nil {
 			log.Printf("[SensorData] 发送到 RabbitMQ 失败: %v", err)
 		}

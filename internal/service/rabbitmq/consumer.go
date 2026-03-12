@@ -18,32 +18,8 @@ func StartSensorDataConsumer() {
 		return
 	}
 
-	// 声明队列（持久化）
-	q, err := ch.QueueDeclare(
-		"sensor_data_queue", // 建议使用明确队列名
-		true,                // durable
-		false,               // autoDelete
-		false,               // exclusive
-		false,               // noWait
-		nil,
-	)
-	if err != nil {
-		log.Printf("声明队列失败: %v", err)
-		return
-	}
-
-	// 绑定（假设使用默认交换机 + routing key）
-	err = ch.QueueBind(
-		q.Name,
-		"sensor_data", // routing key，与 Publish 时保持一致
-		"",            // exchange 为空 = 默认 direct 交换机
-		false,
-		nil,
-	)
-	if err != nil {
-		log.Printf("绑定队列失败: %v", err)
-		return
-	}
+	// 使用已声明的队列（不要重新声明）
+	queueName := "sensor_data_queue"
 
 	// 限制每次只处理1条消息（防止并发爆炸）
 	err = ch.Qos(1, 0, false)
@@ -53,7 +29,7 @@ func StartSensorDataConsumer() {
 	}
 
 	msgs, err := ch.Consume(
-		q.Name,
+		queueName,
 		"sensor-consumer-1", // consumer tag，可自定义
 		false,               // 必须手动 ack
 		false, false, false,
@@ -64,7 +40,7 @@ func StartSensorDataConsumer() {
 		return
 	}
 
-	log.Printf("[RabbitMQ Consumer] 等待传感器数据消息... (队列: %s)", q.Name)
+	log.Printf("[RabbitMQ Consumer] 等待传感器数据消息... (队列: %s)", queueName)
 
 	for msg := range msgs {
 		var req pkg.SensorDataRequest

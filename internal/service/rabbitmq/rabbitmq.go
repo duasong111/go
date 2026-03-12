@@ -23,8 +23,8 @@ func Init(host, username, password string) error {
 		return nil
 	}
 
-	// 构建连接字符串
-	addr := "amqp://" + username + ":" + password + "@" + host + ":5672/"
+	// 构建连接字符串（添加虚拟主机参数）
+	addr := "amqp://" + username + ":" + password + "@" + host + ":5672/%2F"
 
 	var err error
 	// 建立连接
@@ -43,8 +43,9 @@ func Init(host, username, password string) error {
 	}
 
 	// 声明一个交换机
+	exchangeName := "sensor_data"
 	err = channel.ExchangeDeclare(
-		"sensor_data", // 交换机名称
+		exchangeName, // 交换机名称
 		"direct",     // 交换机类型
 		true,         // 持久化
 		false,        // 自动删除
@@ -60,13 +61,14 @@ func Init(host, username, password string) error {
 	}
 
 	// 声明一个队列
+	queueName := "sensor_data_queue"
 	_, err = channel.QueueDeclare(
-		"sensor_data_queue", // 队列名称
-		true,                // 持久化
-		false,               // 自动删除
-		false,               // 独占
-		false,               // 非阻塞
-		nil,                 // 额外参数
+		queueName, // 队列名称
+		true,      // 持久化
+		false,     // 自动删除
+		false,     // 独占
+		false,     // 非阻塞
+		nil,       // 额外参数
 	)
 	if err != nil {
 		log.Printf("Failed to declare queue: %v", err)
@@ -76,10 +78,11 @@ func Init(host, username, password string) error {
 	}
 
 	// 绑定队列到交换机
+	routingKey := "sensor_data_key"
 	err = channel.QueueBind(
-		"sensor_data_queue", // 队列名称
-		"sensor_data",       // 路由键
-		"sensor_data",       // 交换机名称
+		queueName,    // 队列名称
+		routingKey,   // 路由键
+		exchangeName, // 交换机名称
 		false,
 		nil,
 	)
@@ -104,8 +107,10 @@ func GetChannel() (*amqp.Channel, error) {
 
 	if conn == nil || conn.IsClosed() || channel == nil {
 		// 重新连接
+		log.Println("RabbitMQ connection lost, reconnecting...")
 		err := Init("60.205.140.163", "rabbitmq", "rabbitmq")
 		if err != nil {
+			log.Printf("Failed to reconnect to RabbitMQ: %v", err)
 			return nil, err
 		}
 	}
@@ -135,7 +140,10 @@ func monitorConnection() {
 		mutex.Lock()
 		if conn != nil && conn.IsClosed() {
 			log.Println("RabbitMQ connection closed, reconnecting...")
-			Init("60.205.140.163", "rabbitmq", "rabbitmq")
+			err := Init("60.205.140.163", "rabbitmq", "rabbitmq")
+			if err != nil {
+				log.Printf("Failed to reconnect: %v", err)
+			}
 		}
 		mutex.Unlock()
 	}

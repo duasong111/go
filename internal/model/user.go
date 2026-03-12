@@ -26,7 +26,6 @@ type User struct {
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
-// 用户的 Bark Token 表（一个用户可能绑定多个设备/多个 Bark key，但通常一个够用）
 type BarkToken struct {
 	ID        uint           `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID    uint           `gorm:"index;not null" json:"user_id"`         // 关联 User

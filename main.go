@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	dsn := "host=10.1.1.136 user=postgres dbname=postgres port=5432 password=gsm200818534 sslmode=disable"
+	dsn := "host=192.168.18.204 user=postgres dbname=postgres port=5432 password=gsm200818534 sslmode=disable"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		panic("数据库连接失败: " + err.Error())
