@@ -1,6 +1,9 @@
 package middleware
 
 import (
+	"awesomeProject/internal/redis"
+	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -43,10 +46,21 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
-			c.Set("user_id", claims["user_id"])
+			userID := claims["user_id"]
+			c.Set("user_id", userID)
 			c.Set("username", claims["username"])
-		} else {
 
+			// 检查 token 是否在 Redis 中存在（单点登录验证）
+			ctx := context.Background()
+			tokenKey := fmt.Sprintf("user:%v:token", userID)
+			storedToken, err := redis.Client.Get(ctx, tokenKey).Result()
+			if err != nil || storedToken != tokenStr {
+				// token 不存在或不匹配，说明已被其他登录覆盖
+				c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "登录已过期，请重新登录"})
+				c.Abort()
+				return
+			}
+		} else {
 			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "无效 token"})
 			c.Abort()
 			return

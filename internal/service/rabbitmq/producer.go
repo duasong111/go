@@ -39,6 +39,5 @@ func Publish(exchange, routingKey string, message interface{}) error {
 		return err
 	}
 
-	log.Printf("Message published to RabbitMQ: %s", string(body))
 	return nil
 }

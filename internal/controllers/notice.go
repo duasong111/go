@@ -544,6 +544,7 @@ func ProcessTempHumidityAlert(deviceID string, temperature, humidity float64) {
 		} else {
 			// 反序列化失败，从数据库查询
 			if err := model.DB.Where("device_id = ?", deviceID).First(&threshold).Error; err != nil {
+				// 数据库中没有记录，静默返回
 				return
 			}
 			// 写入缓存
@@ -554,6 +555,7 @@ func ProcessTempHumidityAlert(deviceID string, temperature, humidity float64) {
 	} else {
 		// 缓存未命中，从数据库查询
 		if err := model.DB.Where("device_id = ?", deviceID).First(&threshold).Error; err != nil {
+			// 数据库中没有记录，静默返回
 			return
 		}
 		// 检查是否启用
@@ -671,6 +673,7 @@ func ProcessDistanceAlert(deviceID string, distance float64) {
 		} else {
 			// 反序列化失败，从数据库查询
 			if err := model.DB.Where("device_id = ?", deviceID).First(&threshold).Error; err != nil {
+				// 数据库中没有记录，静默返回
 				return
 			}
 			// 写入缓存
@@ -681,6 +684,7 @@ func ProcessDistanceAlert(deviceID string, distance float64) {
 	} else {
 		// 缓存未命中，从数据库查询
 		if err := model.DB.Where("device_id = ?", deviceID).First(&threshold).Error; err != nil {
+			// 数据库中没有记录，静默返回
 			return
 		}
 		// 检查是否启用

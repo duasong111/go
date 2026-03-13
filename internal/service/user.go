@@ -80,12 +80,31 @@ func (s *UserService) Login(username, password string) (*model.User, string, err
 	if err != nil {
 		return nil, "", err
 	}
+
+	// 实现单点登录：将 token 存储到 Redis，覆盖旧 token
+	ctx := context.Background()
+	tokenKey := fmt.Sprintf("user:%d:token", user.ID)
+	// 设置 token 到 Redis，过期时间与 JWT 一致
+	err = redis.Client.Set(ctx, tokenKey, tokenString, 24*time.Hour).Err()
+	if err != nil {
+		// 记录错误但不影响登录
+		fmt.Printf("存储 token 到 Redis 失败: %v\n", err)
+	}
+
 	return user, tokenString, nil
 }
 
 // 用户登出
 
 func (s *UserService) Logout(userID uint) error {
+	// 从 Redis 中删除 token
+	ctx := context.Background()
+	tokenKey := fmt.Sprintf("user:%d:token", userID)
+	err := redis.Client.Del(ctx, tokenKey).Err()
+	if err != nil {
+		// 记录错误但不影响登出
+		fmt.Printf("从 Redis 删除 token 失败: %v\n", err)
+	}
 	return nil
 }
 
