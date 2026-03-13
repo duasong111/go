@@ -108,7 +108,7 @@ func GetChannel() (*amqp.Channel, error) {
 	if conn == nil || conn.IsClosed() || channel == nil {
 		// 重新连接
 		log.Println("RabbitMQ connection lost, reconnecting...")
-		err := Init("60.205.140.163", "rabbitmq", "rabbitmq")
+		err := Init("rabbitmq", "rabbitmq", "rabbitmq")
 		if err != nil {
 			log.Printf("Failed to reconnect to RabbitMQ: %v", err)
 			return nil, err
@@ -140,7 +140,7 @@ func monitorConnection() {
 		mutex.Lock()
 		if conn != nil && conn.IsClosed() {
 			log.Println("RabbitMQ connection closed, reconnecting...")
-			err := Init("60.205.140.163", "rabbitmq", "rabbitmq")
+			err := Init("rabbitmq", "rabbitmq", "rabbitmq")
 			if err != nil {
 				log.Printf("Failed to reconnect: %v", err)
 			}
