@@ -1,6 +1,7 @@
 package rabbitmq
 
 import (
+	"awesomeProject/internal/config"
 	"log"
 	"sync"
 	"time"
@@ -23,18 +24,13 @@ func Init(host, username, password string) error {
 		return nil
 	}
 
-	// 构建连接字符串（添加虚拟主机参数）
-	addr := "amqp://" + username + ":" + password + "@" + host + ":5672/%2F"
-
 	var err error
-	// 建立连接
-	conn, err = amqp.Dial(addr)
+	conn, err = amqp.Dial(config.AppConfig.RabbitMQ.GetRabbitMQURL())
 	if err != nil {
 		log.Printf("Failed to connect to RabbitMQ: %v", err)
 		return err
 	}
 
-	// 建立通道
 	channel, err = conn.Channel()
 	if err != nil {
 		log.Printf("Failed to open a channel: %v", err)
@@ -42,16 +38,15 @@ func Init(host, username, password string) error {
 		return err
 	}
 
-	// 声明一个交换机
-	exchangeName := "sensor_data"
+	exchangeName := config.AppConfig.RabbitMQ.Exchange
 	err = channel.ExchangeDeclare(
-		exchangeName, // 交换机名称
-		"direct",     // 交换机类型
-		true,         // 持久化
-		false,        // 自动删除
-		false,        // 内部
-		false,        // 非阻塞
-		nil,          // 额外参数
+		exchangeName,
+		"direct",
+		true,
+		false,
+		false,
+		false,
+		nil,
 	)
 	if err != nil {
 		log.Printf("Failed to declare exchange: %v", err)
@@ -60,15 +55,14 @@ func Init(host, username, password string) error {
 		return err
 	}
 
-	// 声明一个队列
-	queueName := "sensor_data_queue"
+	queueName := config.AppConfig.RabbitMQ.Queue
 	_, err = channel.QueueDeclare(
-		queueName, // 队列名称
-		true,      // 持久化
-		false,     // 自动删除
-		false,     // 独占
-		false,     // 非阻塞
-		nil,       // 额外参数
+		queueName,
+		true,
+		false,
+		false,
+		false,
+		nil,
 	)
 	if err != nil {
 		log.Printf("Failed to declare queue: %v", err)
@@ -77,12 +71,11 @@ func Init(host, username, password string) error {
 		return err
 	}
 
-	// 绑定队列到交换机
-	routingKey := "sensor_data_key"
+	routingKey := config.AppConfig.RabbitMQ.RoutingKey
 	err = channel.QueueBind(
-		queueName,    // 队列名称
-		routingKey,   // 路由键
-		exchangeName, // 交换机名称
+		queueName,
+		routingKey,
+		exchangeName,
 		false,
 		nil,
 	)
@@ -93,7 +86,6 @@ func Init(host, username, password string) error {
 		return err
 	}
 
-	// 设置连接监控
 	go monitorConnection()
 
 	log.Println("RabbitMQ connection initialized successfully")
@@ -106,9 +98,12 @@ func GetChannel() (*amqp.Channel, error) {
 	defer mutex.Unlock()
 
 	if conn == nil || conn.IsClosed() || channel == nil {
-		// 重新连接
 		log.Println("RabbitMQ connection lost, reconnecting...")
-		err := Init("rabbitmq", "rabbitmq", "rabbitmq")
+		err := Init(
+			config.AppConfig.RabbitMQ.Host,
+			config.AppConfig.RabbitMQ.User,
+			config.AppConfig.RabbitMQ.Password,
+		)
 		if err != nil {
 			log.Printf("Failed to reconnect to RabbitMQ: %v", err)
 			return nil, err
@@ -140,7 +135,11 @@ func monitorConnection() {
 		mutex.Lock()
 		if conn != nil && conn.IsClosed() {
 			log.Println("RabbitMQ connection closed, reconnecting...")
-			err := Init("rabbitmq", "rabbitmq", "rabbitmq")
+			err := Init(
+				config.AppConfig.RabbitMQ.Host,
+				config.AppConfig.RabbitMQ.User,
+				config.AppConfig.RabbitMQ.Password,
+			)
 			if err != nil {
 				log.Printf("Failed to reconnect: %v", err)
 			}

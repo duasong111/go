@@ -46,7 +46,10 @@ func (s *UserService) Register(username, password, email string) (*model.User, e
 	user := &model.User{
 		Username: username,
 		Password: string(hashedPassword),
-		Email:    email,
+	}
+	// 只有在提供邮箱时才设置 Email 字段
+	if email != "" {
+		user.Email = &email
 	}
 	if err := s.repo.CreateUser(user); err != nil {
 		return nil, err
@@ -135,13 +138,13 @@ func (s *UserService) UpdateUser(id uint, updates map[string]interface{}) (*mode
 	}
 
 	// 2. 验证唯一性字段（Email 和 Phone）
-	if email, ok := updates["email"].(string); ok && email != "" && email != user.Email {
+	if email, ok := updates["email"].(string); ok && email != "" && (user.Email == nil || email != *user.Email) {
 		existing, err := s.repo.GetUserByEmail(email) // 需添加 GetUserByEmail 方法
 		if err == nil && existing != nil {
 			return nil, errors.New("邮箱已存在")
 		}
 	}
-	if phone, ok := updates["phone"].(string); ok && phone != "" && phone != user.Phone {
+	if phone, ok := updates["phone"].(string); ok && phone != "" && (user.Phone == nil || phone != *user.Phone) {
 		existing, err := s.repo.GetUserByPhone(phone) // 需添加 GetUserByPhone 方法
 		if err == nil && existing != nil {
 			return nil, errors.New("手机号已存在")

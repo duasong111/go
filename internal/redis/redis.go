@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"awesomeProject/internal/config"
 	"context"
 	"log"
 	"time"
@@ -12,21 +13,19 @@ var Client *redis.Client
 
 func InitRedis() {
 	Client = redis.NewClient(&redis.Options{
-		Addr:     "10.1.1.136:6379",
-		Password: "gsm200818534",
-		DB:       0,
-
+		Addr:         config.AppConfig.Redis.GetRedisAddr(),
+		Password:     config.AppConfig.Redis.Password,
+		DB:           config.AppConfig.Redis.DB,
 		DialTimeout:  5 * time.Second,
 		ReadTimeout:  3 * time.Second,
 		WriteTimeout: 3 * time.Second,
-		PoolSize:     8,
-		MinIdleConns: 2,
+		PoolSize:     config.AppConfig.Redis.PoolSize,
+		MinIdleConns: config.AppConfig.Redis.MinIdleConns,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// 測試連線
 	pong, err := Client.Ping(ctx).Result()
 	if err != nil {
 		log.Fatalf("Redis 連線失敗: %v", err)
@@ -34,7 +33,6 @@ func InitRedis() {
 
 	log.Printf("Redis 連線成功！PING → %s", pong)
 
-	// 可選：順便寫入/讀取一次測試key（驗證寫入權限）
 	testKey := "test:ping:" + time.Now().Format("20060102150405")
 	err = Client.Set(ctx, testKey, "ok", 60*time.Second).Err()
 	if err != nil {
@@ -50,3 +48,4 @@ func InitRedis() {
 
 	log.Println("Redis 讀寫測試通過 ✓")
 }
+

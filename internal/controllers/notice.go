@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"awesomeProject/internal/config"
 	"awesomeProject/internal/model"
 	"awesomeProject/internal/redis"
 	"awesomeProject/internal/service"
@@ -487,7 +488,11 @@ func SensorData(c *gin.Context) {
 
 	// 发送数据到 RabbitMQ
 	go func() {
-		err := rabbitmq.Publish("sensor_data", "sensor_data_key", req)
+		err := rabbitmq.Publish(
+			config.AppConfig.RabbitMQ.Exchange,
+			config.AppConfig.RabbitMQ.RoutingKey,
+			req,
+		)
 		if err != nil {
 			log.Printf("[SensorData] 发送到 RabbitMQ 失败: %v", err)
 		}

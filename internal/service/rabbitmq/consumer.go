@@ -3,25 +3,21 @@
 package rabbitmq
 
 import (
+	"awesomeProject/internal/config"
+	"awesomeProject/pkg"
 	"encoding/json"
 	"log"
-
-	"awesomeProject/pkg" // 假设 SensorDataRequest 在此包
-	// 例如：
-	// "awesomeProject/internal/service/alert"   ← 根据实际情况调整路径
 )
 
 func StartSensorDataConsumer() {
-	ch, err := GetChannel() // 假设您已有 GetChannel() 方法返回 *amqp.Channel
+	ch, err := GetChannel()
 	if err != nil {
 		log.Printf("消费者获取通道失败: %v", err)
 		return
 	}
 
-	// 使用已声明的队列（不要重新声明）
-	queueName := "sensor_data_queue"
+	queueName := config.AppConfig.RabbitMQ.Queue
 
-	// 限制每次只处理1条消息（防止并发爆炸）
 	err = ch.Qos(1, 0, false)
 	if err != nil {
 		log.Printf("设置 QoS 失败: %v", err)
@@ -30,8 +26,8 @@ func StartSensorDataConsumer() {
 
 	msgs, err := ch.Consume(
 		queueName,
-		"sensor-consumer-1", // consumer tag，可自定义
-		false,               // 必须手动 ack
+		"sensor-consumer-1",
+		false,
 		false, false, false,
 		nil,
 	)

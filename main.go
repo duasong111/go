@@ -1,6 +1,7 @@
 package main
 
 import (
+	"awesomeProject/internal/config"
 	"awesomeProject/internal/model"
 	"awesomeProject/internal/redis"
 	"awesomeProject/internal/routes"
@@ -16,8 +17,13 @@ import (
 )
 
 func main() {
-	dsn := "host=10.1.1.136 user=postgres dbname=postgres port=5432 password=gsm200818534 sslmode=disable"
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	// 加载配置文件
+	if err := config.LoadConfig("./config/config.yaml"); err != nil {
+		log.Fatalf("加载配置文件失败: %v", err)
+	}
+
+	// 连接数据库
+	db, err := gorm.Open(postgres.Open(config.AppConfig.Database.GetDSN()), &gorm.Config{})
 	if err != nil {
 		panic("数据库连接失败: " + err.Error())
 	}
@@ -25,43 +31,59 @@ func main() {
 	if err := db.AutoMigrate(&model.User{}, &model.BarkToken{}, &model.Threshold{}, &model.DistanceThreshold{}); err != nil {
 		panic("表迁移失败: " + err.Error())
 	}
+
+	// 初始化 Redis
 	redis.InitRedis()
+
+	// 启动 WebSocket Hub
 	go service.Hub.Run()
+
+	// 初始化 MQTT
 	if err := service.InitMQTT(); err != nil {
 		log.Fatalf("MQTT 初始化失败: %v", err)
 	}
+
 	// 初始化 RabbitMQ 连接
-	if err := rabbitmq.Init("60.205.140.163", "rabbitmq", "rabbitmq"); err != nil {
+	if err := rabbitmq.Init(
+		config.AppConfig.RabbitMQ.Host,
+		config.AppConfig.RabbitMQ.User,
+		config.AppConfig.RabbitMQ.Password,
+	); err != nil {
 		log.Printf("RabbitMQ 初始化失败: %v", err)
-		// 非致命，继续运行（视业务决定是否要 panic）
 	} else {
-		// 初始化成功 → 启动消费者（常驻）
 		go rabbitmq.StartSensorDataConsumer()
 		log.Println("RabbitMQ 消费者已启动")
 	}
 
+	// 创建 Gin 引擎
 	r := gin.Default()
 
-	// 设置可信代理，解决 Gin 警告
+	// 设置可信代理
 	err = r.SetTrustedProxies([]string{"192.168.18.0/24", "127.0.0.1"})
 	if err != nil {
 		log.Printf("设置可信代理失败: %v", err)
 	}
 
-	r.Use(cors.New(cors.Config{ // 解决了跨域问题
-		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:8080"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           12 * 3600,
+	// 配置 CORS
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     config.AppConfig.CORS.AllowOrigins,
+		AllowMethods:     config.AppConfig.CORS.AllowMethods,
+		AllowHeaders:     config.AppConfig.CORS.AllowHeaders,
+		ExposeHeaders:    config.AppConfig.CORS.ExposeHeaders,
+		AllowCredentials: config.AppConfig.CORS.AllowCredentials,
+		MaxAge:           time.Duration(config.AppConfig.CORS.MaxAge) * time.Second,
 	}))
 
+	// 注册路由
 	routes.RegisterRoutes(r, db)
+
+	// 测试 WebSocket
 	go func() {
 		time.Sleep(3 * time.Second)
 		service.BroadcastToWS("test/topic", `{"message": "hello from server"}`)
 	}()
 
-	r.Run("0.0.0.0:8001")
+	// 启动服务器
+	log.Printf("服务器启动在端口: %d", config.AppConfig.Server.Port)
+	r.Run(":8000")
 }
