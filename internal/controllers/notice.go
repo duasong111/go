@@ -1,6 +1,13 @@
 package controllers
 
 import (
+	"awesomeProject/internal/config"
+	"awesomeProject/internal/elasticsearch"
+	"awesomeProject/internal/model"
+	"awesomeProject/internal/redis"
+	"awesomeProject/internal/service"
+	"awesomeProject/internal/service/rabbitmq"
+	"awesomeProject/pkg"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,13 +16,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"awesomeProject/internal/config"
-	"awesomeProject/internal/model"
-	"awesomeProject/internal/redis"
-	"awesomeProject/internal/service"
-	"awesomeProject/internal/service/rabbitmq"
-	"awesomeProject/pkg"
 
 	"github.com/gin-gonic/gin"
 )
@@ -495,6 +495,14 @@ func SensorData(c *gin.Context) {
 		)
 		if err != nil {
 			log.Printf("[SensorData] 发送到 RabbitMQ 失败: %v", err)
+		}
+	}()
+
+	// 索引到 Elasticsearch
+	go func() {
+		err := elasticsearch.IndexSensorData(req.DeviceID, req.Temperature, req.Humidity, req.Distance)
+		if err != nil {
+			log.Printf("[SensorData] 索引到 Elasticsearch 失败: %v", err)
 		}
 	}()
 

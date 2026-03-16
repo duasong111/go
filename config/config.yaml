@@ -63,3 +63,13 @@ cors:
     - Content-Length
   allow_credentials: true
   max_age: 43200 # 12小时
+
+# Elasticsearch 配置
+elasticsearch:
+  enabled: true
+  host: 43.136.37.113
+  port: 9200
+  username: elastic
+  password: F*EtjS0XwPcaHjR4SwgB
+  index: sensor-log
+  sniff: false

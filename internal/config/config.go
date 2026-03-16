@@ -8,13 +8,14 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	RabbitMQ RabbitMQConfig `mapstructure:"rabbitmq"`
-	MQTT     MQTTConfig     `mapstructure:"mqtt"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
-	CORS     CORSConfig     `mapstructure:"cors"`
+	Server      ServerConfig      `mapstructure:"server"`
+	Database    DatabaseConfig    `mapstructure:"database"`
+	Redis       RedisConfig       `mapstructure:"redis"`
+	RabbitMQ    RabbitMQConfig    `mapstructure:"rabbitmq"`
+	MQTT        MQTTConfig        `mapstructure:"mqtt"`
+	JWT         JWTConfig         `mapstructure:"jwt"`
+	CORS        CORSConfig        `mapstructure:"cors"`
+	Elasticsearch ElasticsearchConfig `mapstructure:"elasticsearch"`
 }
 
 type ServerConfig struct {
@@ -70,6 +71,16 @@ type CORSConfig struct {
 	ExposeHeaders    []string `mapstructure:"expose_headers"`
 	AllowCredentials bool     `mapstructure:"allow_credentials"`
 	MaxAge           int      `mapstructure:"max_age"`
+}
+
+type ElasticsearchConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+	Index    string `mapstructure:"index"`
+	Sniff    bool   `mapstructure:"sniff"`
 }
 
 var AppConfig *Config

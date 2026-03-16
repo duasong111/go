@@ -15,14 +15,16 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	userService := service.NewUserService(userRepo)
 	sseService := service.NewSSEService(userService)
 	userHandler := controllers.NewUserHandler(userService)
-	sseHandler := controllers.NewSSEController(sseService)
+	sseHandler := controllers.NewSSEController(sseService)// 公开路由（无需认证）
 	publicAPI := r.Group("/api")
 	{
 		publicAPI.POST("/register", userHandler.Register)
 		publicAPI.POST("/login", userHandler.Login)
-	}
-
-	// 受保护路由组（需认证）- 用户操作
+		publicAPI.GET("/logs/search", controllers.SearchLogs)           // 搜索日志
+		publicAPI.GET("/logs/stats", controllers.GetLogStats)            // 获取统计（需先实现 GetLogStats 处理器）
+		publicAPI.GET("/logs/device/:device_id", controllers.GetDeviceLogs) // 获取设备日志
+	} 
+	
 	protectedAPI := r.Group("/api").Use(middleware.AuthMiddleware())
 	{
 		protectedAPI.POST("/logout", userHandler.Logout)

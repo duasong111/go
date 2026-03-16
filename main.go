@@ -2,6 +2,7 @@ package main
 
 import (
 	"awesomeProject/internal/config"
+	"awesomeProject/internal/elasticsearch"
 	"awesomeProject/internal/model"
 	"awesomeProject/internal/redis"
 	"awesomeProject/internal/routes"
@@ -82,6 +83,12 @@ func main() {
 		time.Sleep(3 * time.Second)
 		service.BroadcastToWS("test/topic", `{"message": "hello from server"}`)
 	}()
+
+	// 初始化 Elasticsearch
+	if err := elasticsearch.Init(); err != nil {
+		log.Printf("Elasticsearch 初始化失败: %v", err)
+		// 非致命，继续运行
+	}
 
 	// 启动服务器
 	log.Printf("服务器启动在端口: %d", config.AppConfig.Server.Port)
