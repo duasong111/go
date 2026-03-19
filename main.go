@@ -29,7 +29,7 @@ func main() {
 		panic("数据库连接失败: " + err.Error())
 	}
 	model.InitDB(db)
-	if err := db.AutoMigrate(&model.User{}, &model.BarkToken{}, &model.Threshold{}, &model.DistanceThreshold{}, &model.DeviceOfflineConfig{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.BarkToken{}, &model.Threshold{}, &model.DistanceThreshold{}, &model.DeviceOfflineConfig{}, &model.DeviceFactoryConfig{}, &model.UserDevice{}); err != nil {
 		panic("表迁移失败: " + err.Error())
 	}
 

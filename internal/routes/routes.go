@@ -60,5 +60,8 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	protectedAPI.POST("/device/distance_threshold", controllers.AcceptDistanceThreshold) // 距离阈值设置（独立接口）
 	protectedAPI.POST("/device/offline_config", controllers.ManageDeviceOfflineConfig)   // 管理设备离线监测配置
 	protectedAPI.GET("/device/offline_config", controllers.GetDeviceOfflineConfig)       // 获取设备离线监测配置
+	protectedAPI.POST("/device/bind", controllers.BindDevice)                            // 设备绑定
+	protectedAPI.POST("/device/unbind", controllers.UnbindDevice)                        // 设备解绑
+	protectedAPI.GET("/device/list", controllers.GetUserDevices)                         // 获取用户设备列表
 
 }

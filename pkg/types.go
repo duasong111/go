@@ -61,6 +61,7 @@ type DistanceAlertRequest struct {
 // 统一传感器数据上报请求（包含温湿度和距离）
 type SensorDataRequest struct {
 	DeviceID    string  `json:"device_id" binding:"required"`
+	SecretKey   string  `json:"secret_key" binding:"required"` // 设备密钥
 	Temperature float64 `json:"temperature"`
 	Humidity    float64 `json:"humidity"`
 	Distance    float64 `json:"distance"`

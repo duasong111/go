@@ -4,6 +4,7 @@ import (
 	"awesomeProject/internal/model"
 	"awesomeProject/internal/redis"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,6 +14,42 @@ import (
 )
 
 // 设备离线监测服务
+
+// 查找用户设备映射
+func findUserDevice(userID uint, deviceIdentifier string) (model.UserDevice, error) {
+	var userDevice model.UserDevice
+
+	// 1. 先尝试使用device_id查找
+	if err := model.DB.Where("user_id = ? AND device_id = ?", userID, deviceIdentifier).First(&userDevice).Error; err == nil {
+		return userDevice, nil
+	}
+
+	// 2. 如果找不到，尝试使用设备别名查找
+	if err := model.DB.Where("user_id = ? AND device_name = ?", userID, deviceIdentifier).First(&userDevice).Error; err == nil {
+		return userDevice, nil
+	}
+
+	// 3. 如果还找不到，返回错误
+	return userDevice, errors.New("device not found")
+}
+
+// 查找设备离线配置
+func findDeviceOfflineConfig(userID uint, deviceID string) (model.DeviceOfflineConfig, error) {
+	var config model.DeviceOfflineConfig
+
+	// 尝试获取用户设备映射
+	userDevice, err := findUserDevice(userID, deviceID)
+	if err == nil {
+		// 使用实际的device_id查找
+		if err := model.DB.Where("user_id = ? AND device_id = ?", userID, userDevice.DeviceID).First(&config).Error; err == nil {
+			return config, nil
+		}
+	}
+
+	// 如果找不到，尝试获取用户的第一个设备配置
+	err = model.DB.Where("user_id = ?", userID).First(&config).Error
+	return config, err
+}
 
 // UpdateDeviceLastActive 更新设备最后活跃时间
 func UpdateDeviceLastActive(userID uint, deviceID string) error {
@@ -32,9 +69,8 @@ func UpdateDeviceLastActive(userID uint, deviceID string) error {
 			currentTime := time.Now().Unix()
 
 			// 获取设备的离线配置
-			var config model.DeviceOfflineConfig
-			result := model.DB.Where("user_id = ? AND device_id = ?", userID, deviceID).First(&config)
-			if result.Error == nil && config.IsActive {
+			config, err := findDeviceOfflineConfig(userID, deviceID)
+			if err == nil && config.IsActive {
 				// 如果超过离线阈值，则认为设备之前是离线状态
 				if currentTime-lastActive > int64(config.OfflineThreshold) {
 					// 发送上线提醒
@@ -133,8 +169,19 @@ func checkDeviceOffline() {
 		key := fmt.Sprintf("device:%d:%s:last_active", config.UserID, config.DeviceID)
 		lastActiveStr, err := redis.Client.Get(ctx, key).Result()
 		if err != nil {
-			// 没有记录，可能是设备从未上线
-			continue
+			// 尝试使用设备别名查找
+			var userDevice model.UserDevice
+			if err := model.DB.Where("user_id = ? AND device_id = ?", config.UserID, config.DeviceID).First(&userDevice).Error; err == nil {
+				key = fmt.Sprintf("device:%d:%s:last_active", config.UserID, userDevice.DeviceName)
+				lastActiveStr, err = redis.Client.Get(ctx, key).Result()
+				if err != nil {
+					// 没有记录，可能是设备从未上线
+					continue
+				}
+			} else {
+				// 没有记录，可能是设备从未上线
+				continue
+			}
 		}
 
 		// 解析时间戳

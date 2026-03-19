@@ -100,3 +100,53 @@ func (d *DeviceOfflineConfig) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
+
+// 设备出场设置表
+ type DeviceFactoryConfig struct {
+	ID           uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	DeviceID     string         `gorm:"size:64;unique;not null;index" json:"device_id"` // 设备唯一标识
+	SecretKey    string         `gorm:"size:128;not null" json:"secret_key"`             // 设备密钥
+	ActivationCode string       `gorm:"size:64;unique;not null" json:"activation_code"` // 激活码
+	IsActivated  bool           `gorm:"default:false" json:"is_activated"`               // 是否已激活
+	CreatedAt    time.Time      `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt    time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// 用户设备关联表
+ type UserDevice struct {
+	ID         uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID     uint           `gorm:"index;not null" json:"user_id"`                   // 用户ID
+	DeviceID   string         `gorm:"size:64;index;not null" json:"device_id"`         // 设备ID
+	DeviceName string         `gorm:"size:64;not null" json:"device_name"`             // 设备别名
+	CreatedAt  time.Time      `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt  time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
+	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// 设置唯一索引，确保每个用户的设备ID唯一
+func (UserDevice) TableName() string {
+	return "user_devices"
+}
+
+// BeforeCreate 创建前的钩子，确保用户设备ID唯一
+func (u *UserDevice) BeforeCreate(tx *gorm.DB) error {
+	var count int64
+	tx.Model(&UserDevice{}).Where("user_id = ? AND device_id = ?", u.UserID, u.DeviceID).Count(&count)
+	if count > 0 {
+		return errors.New("该设备已绑定到当前用户")
+	}
+	return nil
+}
+
+// 设备绑定请求
+ type DeviceBindRequest struct {
+	DeviceID       string `json:"device_id" binding:"required"`
+	ActivationCode string `json:"activation_code" binding:"required"`
+	DeviceName     string `json:"device_name" binding:"required"`
+}
+
+// 设备解绑请求
+ type DeviceUnbindRequest struct {
+	DeviceID string `json:"device_id" binding:"required"`
+}

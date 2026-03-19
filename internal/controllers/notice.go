@@ -10,6 +10,7 @@ import (
 	"awesomeProject/pkg"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -486,28 +487,56 @@ func SensorData(c *gin.Context) {
 		return
 	}
 
-	// 查找设备对应的用户
-	var userID uint
-	var threshold model.Threshold
-	var distanceThreshold model.DistanceThreshold
-	var offlineConfig model.DeviceOfflineConfig
+	// 验证设备密钥
+	var factoryConfig model.DeviceFactoryConfig
+	if err := model.DB.Where("device_id = ? AND secret_key = ?", req.DeviceID, req.SecretKey).First(&factoryConfig).Error; err != nil {
+		// 尝试使用设备别名查找
+		var userDevice model.UserDevice
+		if err := model.DB.Where("device_name = ?", req.DeviceID).First(&userDevice).Error; err == nil {
+			if err := model.DB.Where("device_id = ? AND secret_key = ?", userDevice.DeviceID, req.SecretKey).First(&factoryConfig).Error; err == nil {
+				// 使用实际的设备ID
+				req.DeviceID = userDevice.DeviceID
+			} else {
+				log.Printf("[SensorData] 设备密钥验证失败: device_id=%s", req.DeviceID)
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"code":    401,
+					"message": "设备密钥错误",
+				})
+				return
+			}
+		} else {
+			log.Printf("[SensorData] 设备密钥验证失败: device_id=%s", req.DeviceID)
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":    401,
+				"message": "设备密钥错误",
+			})
+			return
+		}
+	}
 
-	// 尝试从阈值配置中查找用户
-	if err := model.DB.Where("device_id = ?", req.DeviceID).First(&threshold).Error; err == nil {
-		userID = threshold.UserID
-	} else if err := model.DB.Where("device_id = ?", req.DeviceID).First(&distanceThreshold).Error; err == nil {
-		userID = distanceThreshold.UserID
-	} else if err := model.DB.Where("device_id = ?", req.DeviceID).First(&offlineConfig).Error; err == nil {
-		userID = offlineConfig.UserID
-	} else {
-		// 找不到设备对应的用户，静默处理
-		log.Printf("[SensorData] 未找到设备 %s 对应的用户", req.DeviceID)
-		c.JSON(http.StatusOK, gin.H{
-			"code":    200,
-			"message": "传感器数据已接收",
+	// 检查设备是否已激活
+	if !factoryConfig.IsActivated {
+		log.Printf("[SensorData] 设备未激活: device_id=%s", req.DeviceID)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "设备未激活",
 		})
 		return
 	}
+
+	// 查找设备对应的用户
+	var userDevice model.UserDevice
+	if err := model.DB.Where("device_id = ?", req.DeviceID).First(&userDevice).Error; err != nil {
+		log.Printf("[SensorData] 设备未绑定到用户: device_id=%s", req.DeviceID)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "设备未绑定到用户",
+		})
+		return
+	}
+
+	// 获取设备对应的用户ID
+	userID := userDevice.UserID
 
 	// 更新设备最后活跃时间
 	go func() {
@@ -587,7 +616,7 @@ func ProcessTempHumidityAlert(userID uint, deviceID string, temperature, humidit
 			}
 		} else {
 			// 反序列化失败，从数据库查询
-			if err := model.DB.Where("user_id = ? AND device_id = ?", userID, deviceID).First(&threshold).Error; err != nil {
+			if err := findThreshold(userID, deviceID, &threshold); err != nil {
 				// 数据库中没有记录，静默返回
 				return
 			}
@@ -598,7 +627,7 @@ func ProcessTempHumidityAlert(userID uint, deviceID string, temperature, humidit
 		}
 	} else {
 		// 缓存未命中，从数据库查询
-		if err := model.DB.Where("user_id = ? AND device_id = ?", userID, deviceID).First(&threshold).Error; err != nil {
+		if err := findThreshold(userID, deviceID, &threshold); err != nil {
 			// 数据库中没有记录，静默返回
 			return
 		}
@@ -699,6 +728,54 @@ func ProcessTempHumidityAlert(userID uint, deviceID string, temperature, humidit
 	}()
 }
 
+// 查找用户设备映射
+func findUserDevice(userID uint, deviceIdentifier string) (model.UserDevice, error) {
+	var userDevice model.UserDevice
+
+	// 1. 先尝试使用device_id查找
+	if err := model.DB.Where("user_id = ? AND device_id = ?", userID, deviceIdentifier).First(&userDevice).Error; err == nil {
+		return userDevice, nil
+	}
+
+	// 2. 如果找不到，尝试使用设备别名查找
+	if err := model.DB.Where("user_id = ? AND device_name = ?", userID, deviceIdentifier).First(&userDevice).Error; err == nil {
+		return userDevice, nil
+	}
+
+	// 3. 如果还找不到，返回错误
+	return userDevice, errors.New("device not found")
+}
+
+// 查找温湿度阈值配置
+func findThreshold(userID uint, deviceID string, threshold *model.Threshold) error {
+	// 尝试获取用户设备映射
+	userDevice, err := findUserDevice(userID, deviceID)
+	if err == nil {
+		// 使用实际的device_id查找
+		if err := model.DB.Where("user_id = ? AND device_id = ?", userID, userDevice.DeviceID).First(threshold).Error; err == nil {
+			return nil
+		}
+	}
+
+	// 如果找不到，尝试获取用户的第一个设备配置
+	return model.DB.Where("user_id = ?", userID).First(threshold).Error
+}
+
+// 查找距离阈值配置
+func findDistanceThreshold(userID uint, deviceID string, threshold *model.DistanceThreshold) error {
+	// 尝试获取用户设备映射
+	userDevice, err := findUserDevice(userID, deviceID)
+	if err == nil {
+		// 使用实际的device_id查找
+		if err := model.DB.Where("user_id = ? AND device_id = ?", userID, userDevice.DeviceID).First(threshold).Error; err == nil {
+			return nil
+		}
+	}
+
+	// 如果找不到，尝试获取用户的第一个设备配置
+	return model.DB.Where("user_id = ?", userID).First(threshold).Error
+}
+
 // 处理距离报警（内部函数）
 func ProcessDistanceAlert(userID uint, deviceID string, distance float64) {
 	ctx := context.Background()
@@ -716,7 +793,7 @@ func ProcessDistanceAlert(userID uint, deviceID string, distance float64) {
 			}
 		} else {
 			// 反序列化失败，从数据库查询
-			if err := model.DB.Where("user_id = ? AND device_id = ?", userID, deviceID).First(&threshold).Error; err != nil {
+			if err := findDistanceThreshold(userID, deviceID, &threshold); err != nil {
 				// 数据库中没有记录，静默返回
 				return
 			}
@@ -727,7 +804,7 @@ func ProcessDistanceAlert(userID uint, deviceID string, distance float64) {
 		}
 	} else {
 		// 缓存未命中，从数据库查询
-		if err := model.DB.Where("user_id = ? AND device_id = ?", userID, deviceID).First(&threshold).Error; err != nil {
+		if err := findDistanceThreshold(userID, deviceID, &threshold); err != nil {
 			// 数据库中没有记录，静默返回
 			return
 		}
@@ -1201,5 +1278,215 @@ func ControlDevices(c *gin.Context) {
 		"message":       "设备控制命令已发送",
 		"device_id":     req.DeviceID,
 		"control_count": len(req.Controls),
+	})
+}
+
+// 设备绑定接口
+func BindDevice(c *gin.Context) {
+	var req model.DeviceBindRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "参数格式错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "请先登录",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	// 查找设备出厂配置
+	var factoryConfig model.DeviceFactoryConfig
+	if err := model.DB.Where("device_id = ? AND activation_code = ?", req.DeviceID, req.ActivationCode).First(&factoryConfig).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "设备ID或激活码错误",
+		})
+		return
+	}
+
+	// 检查设备是否已激活
+	if factoryConfig.IsActivated {
+		// 检查设备是否已绑定到其他用户
+		var existingUserDevice model.UserDevice
+		if err := model.DB.Where("device_id = ?", req.DeviceID).First(&existingUserDevice).Error; err == nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    400,
+				"message": "该设备已被其他用户绑定",
+			})
+			return
+		}
+	}
+
+	// 开始事务
+	tx := model.DB.Begin()
+
+	// 激活设备
+	factoryConfig.IsActivated = true
+	if err := tx.Save(&factoryConfig).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "设备激活失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 创建用户设备关联
+	userDevice := model.UserDevice{
+		UserID:     userID,
+		DeviceID:   req.DeviceID,
+		DeviceName: req.DeviceName,
+	}
+
+	if err := tx.Create(&userDevice).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "设备绑定失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "事务提交失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "设备绑定成功",
+		"data": gin.H{
+			"device_id":    factoryConfig.DeviceID,
+			"device_name":  userDevice.DeviceName,
+			"secret_key":   factoryConfig.SecretKey,
+			"is_activated": factoryConfig.IsActivated,
+			"bound_at":     userDevice.CreatedAt,
+			"info":         "请将此device_id和secret_key配置到设备中，设备上传数据时需要使用此device_id",
+		},
+	})
+}
+
+// 设备解绑接口
+func UnbindDevice(c *gin.Context) {
+	var req model.DeviceUnbindRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "参数格式错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "请先登录",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	// 查找用户设备关联
+	var userDevice model.UserDevice
+	if err := model.DB.Where("device_id = ? AND user_id = ?", req.DeviceID, userID).First(&userDevice).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "设备不存在或未绑定到当前用户",
+		})
+		return
+	}
+
+	// 开始事务
+	tx := model.DB.Begin()
+
+	// 解绑设备（删除用户设备关联）
+	if err := tx.Delete(&userDevice).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "设备解绑失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "事务提交失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "设备解绑成功",
+		"data": gin.H{
+			"device_id":  req.DeviceID,
+			"unbound_at": time.Now(),
+		},
+	})
+}
+
+// 获取用户绑定的设备列表
+func GetUserDevices(c *gin.Context) {
+	// 获取当前用户ID
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "请先登录",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	// 查询用户绑定的设备
+	var userDevices []model.UserDevice
+	if err := model.DB.Where("user_id = ?", userID).Find(&userDevices).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取设备列表失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 构建设备信息列表
+	type DeviceInfo struct {
+		DeviceID   string    `json:"device_id"`
+		DeviceName string    `json:"device_name"`
+		BoundAt    time.Time `json:"bound_at"`
+		Info       string    `json:"info"`
+	}
+
+	var deviceInfos []DeviceInfo
+	for _, ud := range userDevices {
+		deviceInfos = append(deviceInfos, DeviceInfo{
+			DeviceID:   ud.DeviceID,
+			DeviceName: ud.DeviceName,
+			BoundAt:    ud.CreatedAt,
+			Info:       "配置阈值时请使用此device_id",
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "获取设备列表成功",
+		"data":    deviceInfos,
 	})
 }
