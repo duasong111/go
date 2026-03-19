@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -68,4 +69,34 @@ type DistanceThreshold struct {
 	CreatedAt     time.Time      `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt     time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// 设备离线监测配置表
+type DeviceOfflineConfig struct {
+	ID                uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID            uint           `gorm:"index;not null" json:"user_id"`
+	DeviceID          string         `gorm:"size:64;index" json:"device_id"`           // 设备标识
+	IsActive          bool           `gorm:"default:false" json:"is_active"`           // 是否启用离线监测
+	EnableOnlineAlert bool           `gorm:"default:false" json:"enable_online_alert"` // 是否启用上线提醒
+	MaxAlertCount     int            `gorm:"default:3" json:"max_alert_count"`         // 最大通知次数，默认3次
+	OfflineThreshold  int            `gorm:"default:300" json:"offline_threshold"`     // 离线判断阈值（秒），默认5分钟
+	AlertInterval     int            `gorm:"default:300" json:"alert_interval"`        // 报警间隔秒数，默认5分钟
+	CreatedAt         time.Time      `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt         time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
+	DeletedAt         gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// 设置唯一索引，确保每个用户的设备ID唯一
+func (DeviceOfflineConfig) TableName() string {
+	return "device_offline_configs"
+}
+
+// BeforeCreate 创建前的钩子，确保用户设备ID唯一
+func (d *DeviceOfflineConfig) BeforeCreate(tx *gorm.DB) error {
+	var count int64
+	tx.Model(&DeviceOfflineConfig{}).Where("user_id = ? AND device_id = ?", d.UserID, d.DeviceID).Count(&count)
+	if count > 0 {
+		return errors.New("该设备ID已存在")
+	}
+	return nil
 }

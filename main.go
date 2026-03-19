@@ -2,6 +2,7 @@ package main
 
 import (
 	"awesomeProject/internal/config"
+	"awesomeProject/internal/elasticsearch"
 	"awesomeProject/internal/model"
 	"awesomeProject/internal/redis"
 	"awesomeProject/internal/routes"
@@ -28,7 +29,7 @@ func main() {
 		panic("数据库连接失败: " + err.Error())
 	}
 	model.InitDB(db)
-	if err := db.AutoMigrate(&model.User{}, &model.BarkToken{}, &model.Threshold{}, &model.DistanceThreshold{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.BarkToken{}, &model.Threshold{}, &model.DistanceThreshold{}, &model.DeviceOfflineConfig{}); err != nil {
 		panic("表迁移失败: " + err.Error())
 	}
 
@@ -54,6 +55,9 @@ func main() {
 		go rabbitmq.StartSensorDataConsumer()
 		log.Println("RabbitMQ 消费者已启动")
 	}
+
+	// 启动设备离线监测服务
+	service.StartDeviceOfflineMonitor()
 
 	// 创建 Gin 引擎
 	r := gin.Default()
@@ -82,6 +86,12 @@ func main() {
 		time.Sleep(3 * time.Second)
 		service.BroadcastToWS("test/topic", `{"message": "hello from server"}`)
 	}()
+
+	// 初始化 Elasticsearch
+	if err := elasticsearch.Init(); err != nil {
+		log.Printf("Elasticsearch 初始化失败: %v", err)
+		// 非致命，继续运行
+	}
 
 	// 启动服务器
 	log.Printf("服务器启动在端口: %d", config.AppConfig.Server.Port)

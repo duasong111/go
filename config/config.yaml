@@ -5,16 +5,16 @@ server:
 
 # PostgresSQL 数据库配置
 database:
-  host: 192.168.18.204
+  host: 10.1.1.136
   port: 5432
   user: postgres
   password: gsm200818534
-  dbname: postgres
+  dbname: go
   sslmode: disable
 
 # Redis 配置
 redis:
-  host: 192.168.18.204
+  host: 10.1.1.136
   port: 6379
   password: gsm200818534
   db: 0
@@ -63,3 +63,13 @@ cors:
     - Content-Length
   allow_credentials: true
   max_age: 43200 # 12小时
+
+# Elasticsearch 配置
+elasticsearch:
+  enabled: true
+  host: 43.136.37.113
+  port: 9200
+  username: elastic
+  password: F*EtjS0XwPcaHjR4SwgB
+  index: sensor-log
+  sniff: false

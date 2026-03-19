@@ -1,6 +1,13 @@
 package controllers
 
 import (
+	"awesomeProject/internal/config"
+	"awesomeProject/internal/elasticsearch"
+	"awesomeProject/internal/model"
+	"awesomeProject/internal/redis"
+	"awesomeProject/internal/service"
+	"awesomeProject/internal/service/rabbitmq"
+	"awesomeProject/pkg"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,13 +16,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"awesomeProject/internal/config"
-	"awesomeProject/internal/model"
-	"awesomeProject/internal/redis"
-	"awesomeProject/internal/service"
-	"awesomeProject/internal/service/rabbitmq"
-	"awesomeProject/pkg"
 
 	"github.com/gin-gonic/gin"
 )
@@ -172,7 +172,7 @@ func AcceptThreshold(c *gin.Context) {
 
 	// 清除 Redis 缓存
 	ctx := context.Background()
-	cacheKey := fmt.Sprintf("threshold:%s", req.DeviceID)
+	cacheKey := fmt.Sprintf("threshold:%d:%s", userID, req.DeviceID)
 	redis.Client.Del(ctx, cacheKey)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -238,7 +238,7 @@ func BarkAlert(c *gin.Context) {
 
 	alertMessage := strings.Join(alertItems, "；")
 
-	cooldownKey := fmt.Sprintf("alert:cooldown:%s:%s", req.DeviceID, alertMessage)
+	cooldownKey := fmt.Sprintf("alert:cooldown:%d:%s:%s", threshold.UserID, req.DeviceID, alertMessage)
 	ctx := context.Background()
 	setOK, err := redis.Client.SetNX(ctx, cooldownKey, "1", time.Duration(threshold.AlertInterval)*time.Second).Result()
 	if err != nil {
@@ -372,7 +372,7 @@ func AcceptDistanceThreshold(c *gin.Context) {
 	}
 	// 清除缓存
 	ctx := context.Background()
-	cacheKey := fmt.Sprintf("distance_threshold:%s", req.DeviceID)
+	cacheKey := fmt.Sprintf("distance_threshold:%d:%s", userID, req.DeviceID)
 	redis.Client.Del(ctx, cacheKey)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -422,7 +422,7 @@ func DistanceAlert(c *gin.Context) {
 	alertMessage := fmt.Sprintf("距离过近: %.1f < %.1f", req.Distance, *threshold.DistanceMin)
 	//log.Printf("[DistanceAlert] 触发报警: %s", alertMessage)
 
-	cooldownKey := fmt.Sprintf("distance_alert:cooldown:%s:%s", req.DeviceID, alertMessage)
+	cooldownKey := fmt.Sprintf("distance_alert:cooldown:%d:%s:%s", threshold.UserID, req.DeviceID, alertMessage)
 	ctx := context.Background()
 	setOK, err := redis.Client.SetNX(ctx, cooldownKey, "1", time.Duration(threshold.AlertInterval)*time.Second).Result()
 	if err != nil {
@@ -486,6 +486,37 @@ func SensorData(c *gin.Context) {
 		return
 	}
 
+	// 查找设备对应的用户
+	var userID uint
+	var threshold model.Threshold
+	var distanceThreshold model.DistanceThreshold
+	var offlineConfig model.DeviceOfflineConfig
+
+	// 尝试从阈值配置中查找用户
+	if err := model.DB.Where("device_id = ?", req.DeviceID).First(&threshold).Error; err == nil {
+		userID = threshold.UserID
+	} else if err := model.DB.Where("device_id = ?", req.DeviceID).First(&distanceThreshold).Error; err == nil {
+		userID = distanceThreshold.UserID
+	} else if err := model.DB.Where("device_id = ?", req.DeviceID).First(&offlineConfig).Error; err == nil {
+		userID = offlineConfig.UserID
+	} else {
+		// 找不到设备对应的用户，静默处理
+		log.Printf("[SensorData] 未找到设备 %s 对应的用户", req.DeviceID)
+		c.JSON(http.StatusOK, gin.H{
+			"code":    200,
+			"message": "传感器数据已接收",
+		})
+		return
+	}
+
+	// 更新设备最后活跃时间
+	go func() {
+		err := service.UpdateDeviceLastActive(userID, req.DeviceID)
+		if err != nil {
+			log.Printf("[SensorData] 更新设备最后活跃时间失败: %v", err)
+		}
+	}()
+
 	// 发送数据到 RabbitMQ
 	go func() {
 		err := rabbitmq.Publish(
@@ -498,19 +529,27 @@ func SensorData(c *gin.Context) {
 		}
 	}()
 
+	// 索引到 Elasticsearch
+	go func() {
+		err := elasticsearch.IndexSensorData(req.DeviceID, req.Temperature, req.Humidity, req.Distance)
+		if err != nil {
+			log.Printf("[SensorData] 索引到 Elasticsearch 失败: %v", err)
+		}
+	}()
+
 	// 创建通道来接收两个处理结果
 	tempHumidityDone := make(chan bool, 1)
 	distanceDone := make(chan bool, 1)
 
 	// 异步处理温湿度报警
 	go func() {
-		ProcessTempHumidityAlert(req.DeviceID, req.Temperature, req.Humidity)
+		ProcessTempHumidityAlert(userID, req.DeviceID, req.Temperature, req.Humidity)
 		tempHumidityDone <- true
 	}()
 
 	// 异步处理距离报警
 	go func() {
-		ProcessDistanceAlert(req.DeviceID, req.Distance)
+		ProcessDistanceAlert(userID, req.DeviceID, req.Distance)
 		distanceDone <- true
 	}()
 
@@ -532,9 +571,9 @@ func SensorData(c *gin.Context) {
 }
 
 // 处理温湿度报警（内部函数）
-func ProcessTempHumidityAlert(deviceID string, temperature, humidity float64) {
+func ProcessTempHumidityAlert(userID uint, deviceID string, temperature, humidity float64) {
 	ctx := context.Background()
-	cacheKey := fmt.Sprintf("threshold:%s", deviceID)
+	cacheKey := fmt.Sprintf("threshold:%d:%s", userID, deviceID)
 
 	// 1. 先从 Redis 缓存获取阈值配置
 	var threshold model.Threshold
@@ -548,7 +587,7 @@ func ProcessTempHumidityAlert(deviceID string, temperature, humidity float64) {
 			}
 		} else {
 			// 反序列化失败，从数据库查询
-			if err := model.DB.Where("device_id = ?", deviceID).First(&threshold).Error; err != nil {
+			if err := model.DB.Where("user_id = ? AND device_id = ?", userID, deviceID).First(&threshold).Error; err != nil {
 				// 数据库中没有记录，静默返回
 				return
 			}
@@ -559,7 +598,7 @@ func ProcessTempHumidityAlert(deviceID string, temperature, humidity float64) {
 		}
 	} else {
 		// 缓存未命中，从数据库查询
-		if err := model.DB.Where("device_id = ?", deviceID).First(&threshold).Error; err != nil {
+		if err := model.DB.Where("user_id = ? AND device_id = ?", userID, deviceID).First(&threshold).Error; err != nil {
 			// 数据库中没有记录，静默返回
 			return
 		}
@@ -597,7 +636,7 @@ func ProcessTempHumidityAlert(deviceID string, temperature, humidity float64) {
 	//log.Printf("[processTempHumidityAlert] 触发报警: %s", alertMessage)
 
 	// 防抖
-	cooldownKey := fmt.Sprintf("alert:cooldown:%s:%s", deviceID, alertMessage)
+	cooldownKey := fmt.Sprintf("alert:cooldown:%d:%s:%s", userID, deviceID, alertMessage)
 	setOK, err := redis.Client.SetNX(ctx, cooldownKey, "1", time.Duration(threshold.AlertInterval)*time.Second).Result()
 	if err != nil {
 		//log.Printf("[processTempHumidityAlert] Redis错误: %v", err)
@@ -609,14 +648,14 @@ func ProcessTempHumidityAlert(deviceID string, temperature, humidity float64) {
 	}
 
 	// 获取Bark Token并推送
-	barkTokenCacheKey := fmt.Sprintf("bark_token:%d", threshold.UserID)
+	barkTokenCacheKey := fmt.Sprintf("bark_token:%d", userID)
 	var barkToken model.BarkToken
 	cachedToken, err := redis.Client.Get(ctx, barkTokenCacheKey).Result()
 	if err == nil {
 		// 缓存命中，反序列化
 		if err := json.Unmarshal([]byte(cachedToken), &barkToken); err != nil {
 			// 反序列化失败，从数据库查询
-			if err := model.DB.Where("user_id = ? AND is_active = true", threshold.UserID).First(&barkToken).Error; err != nil {
+			if err := model.DB.Where("user_id = ? AND is_active = true", userID).First(&barkToken).Error; err != nil {
 				return
 			}
 			// 写入缓存
@@ -626,7 +665,7 @@ func ProcessTempHumidityAlert(deviceID string, temperature, humidity float64) {
 		}
 	} else {
 		// 缓存未命中，从数据库查询
-		if err := model.DB.Where("user_id = ? AND is_active = true", threshold.UserID).First(&barkToken).Error; err != nil {
+		if err := model.DB.Where("user_id = ? AND is_active = true", userID).First(&barkToken).Error; err != nil {
 			return
 		}
 		// 写入缓存
@@ -661,9 +700,9 @@ func ProcessTempHumidityAlert(deviceID string, temperature, humidity float64) {
 }
 
 // 处理距离报警（内部函数）
-func ProcessDistanceAlert(deviceID string, distance float64) {
+func ProcessDistanceAlert(userID uint, deviceID string, distance float64) {
 	ctx := context.Background()
-	cacheKey := fmt.Sprintf("distance_threshold:%s", deviceID)
+	cacheKey := fmt.Sprintf("distance_threshold:%d:%s", userID, deviceID)
 
 	// 1. 先从 Redis 缓存获取距离阈值配置
 	var threshold model.DistanceThreshold
@@ -677,7 +716,7 @@ func ProcessDistanceAlert(deviceID string, distance float64) {
 			}
 		} else {
 			// 反序列化失败，从数据库查询
-			if err := model.DB.Where("device_id = ?", deviceID).First(&threshold).Error; err != nil {
+			if err := model.DB.Where("user_id = ? AND device_id = ?", userID, deviceID).First(&threshold).Error; err != nil {
 				// 数据库中没有记录，静默返回
 				return
 			}
@@ -688,7 +727,7 @@ func ProcessDistanceAlert(deviceID string, distance float64) {
 		}
 	} else {
 		// 缓存未命中，从数据库查询
-		if err := model.DB.Where("device_id = ?", deviceID).First(&threshold).Error; err != nil {
+		if err := model.DB.Where("user_id = ? AND device_id = ?", userID, deviceID).First(&threshold).Error; err != nil {
 			// 数据库中没有记录，静默返回
 			return
 		}
@@ -712,7 +751,7 @@ func ProcessDistanceAlert(deviceID string, distance float64) {
 	//log.Printf("[processDistanceAlert] 触发报警: %s", alertMessage)
 
 	// 防抖
-	cooldownKey := fmt.Sprintf("distance_alert:cooldown:%s:%s", deviceID, alertMessage)
+	cooldownKey := fmt.Sprintf("distance_alert:cooldown:%d:%s:%s", userID, deviceID, alertMessage)
 	setOK, err := redis.Client.SetNX(ctx, cooldownKey, "1", time.Duration(threshold.AlertInterval)*time.Second).Result()
 	if err != nil {
 		//log.Printf("[processDistanceAlert] Redis错误: %v", err)
@@ -724,10 +763,30 @@ func ProcessDistanceAlert(deviceID string, distance float64) {
 	}
 
 	// 获取Bark Token并推送
+	barkTokenCacheKey := fmt.Sprintf("bark_token:%d", userID)
 	var barkToken model.BarkToken
-	if err := model.DB.Where("user_id = ? AND is_active = true", threshold.UserID).First(&barkToken).Error; err != nil {
-		//log.Printf("[processDistanceAlert] 无可用Bark Token: user_id=%d", threshold.UserID)
-		return
+	cachedToken, err := redis.Client.Get(ctx, barkTokenCacheKey).Result()
+	if err == nil {
+		// 缓存命中，反序列化
+		if err := json.Unmarshal([]byte(cachedToken), &barkToken); err != nil {
+			// 反序列化失败，从数据库查询
+			if err := model.DB.Where("user_id = ? AND is_active = true", userID).First(&barkToken).Error; err != nil {
+				return
+			}
+			// 写入缓存
+			if data, err := json.Marshal(barkToken); err == nil {
+				redis.Client.Set(ctx, barkTokenCacheKey, data, 1*time.Hour)
+			}
+		}
+	} else {
+		// 缓存未命中，从数据库查询
+		if err := model.DB.Where("user_id = ? AND is_active = true", userID).First(&barkToken).Error; err != nil {
+			return
+		}
+		// 写入缓存
+		if data, err := json.Marshal(barkToken); err == nil {
+			redis.Client.Set(ctx, barkTokenCacheKey, data, 1*time.Hour)
+		}
 	}
 
 	// 异步推送
@@ -849,7 +908,7 @@ func ManageThreshold(c *gin.Context) {
 
 	// 清除 Redis 缓存
 	ctx := context.Background()
-	cacheKey := fmt.Sprintf("threshold:%s", req.DeviceID)
+	cacheKey := fmt.Sprintf("threshold:%d:%s", userID, req.DeviceID)
 	redis.Client.Del(ctx, cacheKey)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -1035,6 +1094,34 @@ func ControlDevices(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
 			"message": "参数格式错误：" + err.Error(),
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "请先登录",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	// 验证设备是否属于当前用户
+	var deviceCount int64
+	model.DB.Model(&model.Threshold{}).Where("user_id = ? AND device_id = ?", userID, req.DeviceID).Count(&deviceCount)
+	if deviceCount == 0 {
+		model.DB.Model(&model.DistanceThreshold{}).Where("user_id = ? AND device_id = ?", userID, req.DeviceID).Count(&deviceCount)
+	}
+	if deviceCount == 0 {
+		model.DB.Model(&model.DeviceOfflineConfig{}).Where("user_id = ? AND device_id = ?", userID, req.DeviceID).Count(&deviceCount)
+	}
+	if deviceCount == 0 {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":    403,
+			"message": "无权控制该设备",
 		})
 		return
 	}

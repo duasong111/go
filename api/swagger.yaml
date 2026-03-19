@@ -1,0 +1,1173 @@
+openapi: 3.0.0
+info:
+  title: Go 后端 API 文档
+  description: IoT 设备监控和控制系统 API 文档
+  version: 1.0.0
+  contact:
+    name: API 支持
+    email: support@example.com
+
+servers:
+  - url: http://localhost:8000
+    description: 本地开发服务器
+  - url: http://43.136.37.113:8000
+    description: 生产服务器
+
+paths:
+  /api/register:
+    post:
+      summary: 用户注册
+      description: 创建新用户账号
+      tags:
+        - 用户管理
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: 用户名
+                  example: testuser
+                password:
+                  type: string
+                  description: 密码
+                  example: password123
+                email:
+                  type: string
+                  description: 邮箱（可选）
+                  example: test@example.com
+              required:
+                - username
+                - password
+      responses:
+        '200':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/login:
+    post:
+      summary: 用户登录
+      description: 获取认证令牌
+      tags:
+        - 用户管理
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: 用户名
+                  example: testuser
+                password:
+                  type: string
+                  description: 密码
+                  example: password123
+              required:
+                - username
+                - password
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+                            description: JWT 令牌
+                          user_id:
+                            type: integer
+                            description: 用户ID
+                          username:
+                            type: string
+                            description: 用户名
+        '400':
+          description: 登录失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/logout:
+    post:
+      summary: 用户登出
+      description: 注销当前会话
+      tags:
+        - 用户管理
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 登出成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/user/info:
+    get:
+      summary: 获取用户信息
+      description: 查询用户详情
+      tags:
+        - 用户管理
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+
+  /api/update:
+    put:
+      summary: 更新用户信息
+      description: 修改用户个人资料
+      tags:
+        - 用户管理
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  description: 邮箱
+                address:
+                  type: string
+                  description: 地址
+                phone:
+                  type: string
+                  description: 手机号
+                education:
+                  type: string
+                  description: 教育程度
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/modify:
+    put:
+      summary: 修改密码
+      description: 更新用户密码
+      tags:
+        - 用户管理
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                old_password:
+                  type: string
+                  description: 旧密码
+                new_password:
+                  type: string
+                  description: 新密码
+              required:
+                - old_password
+                - new_password
+      responses:
+        '200':
+          description: 修改成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/device/rgb:
+    post:
+      summary: 控制RGB灯
+      description: 开关、颜色调整、亮度调节
+      tags:
+        - 设备控制
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                state:
+                  type: string
+                  description: 状态 (on/off)
+                  example: on
+                color:
+                  type: string
+                  description: 颜色
+                  example: red
+                brightness:
+                  type: integer
+                  description: 亮度 (0-100)
+                  example: 80
+      responses:
+        '200':
+          description: 控制成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/device/screen/text:
+    post:
+      summary: 控制屏幕文字
+      description: 文本内容、滚动效果、颜色设置、字体设置
+      tags:
+        - 设备控制
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                  description: 文本内容
+                  example: Hello World
+                duration:
+                  type: integer
+                  description: 显示时长（秒）
+                  example: 10
+                scroll:
+                  type: boolean
+                  description: 是否滚动
+                  example: true
+                font_size:
+                  type: integer
+                  description: 字体大小
+                  example: 24
+                text_color:
+                  type: string
+                  description: 文字颜色
+                  example: blue
+                background_color:
+                  type: string
+                  description: 背景颜色
+                  example: white
+      responses:
+        '200':
+          description: 控制成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/device/screen/image:
+    post:
+      summary: 上传图片到屏幕
+      description: 上传本地图片到设备屏幕
+      tags:
+        - 设备控制
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: 图片文件
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/device/screen/image_url:
+    post:
+      summary: 从URL发送图片到屏幕
+      description: 从网络URL获取图片并显示到设备屏幕
+      tags:
+        - 设备控制
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                image_url:
+                  type: string
+                  description: 图片URL
+                  example: https://example.com/image.jpg
+      responses:
+        '200':
+          description: 发送成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/device/buzzer:
+    post:
+      summary: 控制蜂鸣器
+      description: 开关、频率调节、持续时间设置、循环次数设置
+      tags:
+        - 设备控制
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                state:
+                  type: string
+                  description: 状态 (on/off)
+                  example: on
+                frequency:
+                  type: integer
+                  description: 频率 (Hz)
+                  example: 1000
+                duration:
+                  type: integer
+                  description: 持续时间 (ms)
+                  example: 1000
+                repeat:
+                  type: integer
+                  description: 循环次数
+                  example: 1
+      responses:
+        '200':
+          description: 控制成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/device/bark_alert:
+    post:
+      summary: 发送Bark通知
+      description: 发送Bark推送通知
+      tags:
+        - 预警系统
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: 通知标题
+                  example: 预警通知
+                body:
+                  type: string
+                  description: 通知内容
+                  example: 温度超过阈值
+                device_key:
+                  type: string
+                  description: 设备密钥
+                  example: your_bark_key
+      responses:
+        '200':
+          description: 发送成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/device/distance_alert:
+    post:
+      summary: 发送距离预警
+      description: 发送距离预警通知
+      tags:
+        - 预警系统
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_id:
+                  type: string
+                  description: 设备ID
+                  example: esp32_001
+                distance:
+                  type: number
+                  format: float
+                  description: 距离值
+                  example: 15.3
+                threshold:
+                  type: number
+                  format: float
+                  description: 阈值
+                  example: 20.0
+      responses:
+        '200':
+          description: 发送成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/device/sensor_data:
+    post:
+      summary: 接收传感器数据
+      description: 接收和处理温湿度、距离等传感器数据
+      tags:
+        - 传感器数据
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_id:
+                  type: string
+                  description: 设备ID
+                  example: esp32_001
+                temperature:
+                  type: number
+                  format: float
+                  description: 温度值
+                  example: 25.5
+                humidity:
+                  type: number
+                  format: float
+                  description: 湿度值
+                  example: 55.2
+                distance:
+                  type: number
+                  format: float
+                  description: 距离值
+                  example: 15.3
+      responses:
+        '200':
+          description: 接收成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/device/control_self:
+    post:
+      summary: 设备自我控制
+      description: 设备根据传感器数据自动控制
+      tags:
+        - 设备控制
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_id:
+                  type: string
+                  description: 设备ID
+                  example: esp32_001
+                temperature:
+                  type: number
+                  format: float
+                  description: 温度值
+                  example: 25.5
+                humidity:
+                  type: number
+                  format: float
+                  description: 湿度值
+                  example: 55.2
+                distance:
+                  type: number
+                  format: float
+                  description: 距离值
+                  example: 15.3
+      responses:
+        '200':
+          description: 控制成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/device/accept_threshold:
+    post:
+      summary: 接受温湿度阈值
+      description: 设置温湿度预警阈值
+      tags:
+        - 预警系统
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_id:
+                  type: string
+                  description: 设备ID
+                  example: esp32_001
+                temperature_max:
+                  type: number
+                  format: float
+                  description: 温度最大值
+                  example: 30.0
+                temperature_min:
+                  type: number
+                  format: float
+                  description: 温度最小值
+                  example: 10.0
+                humidity_max:
+                  type: number
+                  format: float
+                  description: 湿度最大值
+                  example: 70.0
+                humidity_min:
+                  type: number
+                  format: float
+                  description: 湿度最小值
+                  example: 30.0
+                alert_seconds:
+                  type: integer
+                  description: 预警间隔（秒）
+                  example: 300
+                is_active:
+                  type: boolean
+                  description: 是否激活
+                  example: true
+      responses:
+        '200':
+          description: 设置成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/device/accept_bark_token:
+    post:
+      summary: 接受Bark令牌
+      description: 设置Bark推送令牌
+      tags:
+        - 预警系统
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_id:
+                  type: string
+                  description: 设备ID
+                  example: esp32_001
+                bark_token:
+                  type: string
+                  description: Bark令牌
+                  example: your_bark_token
+      responses:
+        '200':
+          description: 设置成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/device/manage_threshold:
+    post:
+      summary: 管理温湿度阈值
+      description: 管理温湿度预警阈值
+      tags:
+        - 预警系统
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_id:
+                  type: string
+                  description: 设备ID
+                  example: esp32_001
+                temperature_max:
+                  type: number
+                  format: float
+                  description: 温度最大值
+                  example: 30.0
+                temperature_min:
+                  type: number
+                  format: float
+                  description: 温度最小值
+                  example: 10.0
+                humidity_max:
+                  type: number
+                  format: float
+                  description: 湿度最大值
+                  example: 70.0
+                humidity_min:
+                  type: number
+                  format: float
+                  description: 湿度最小值
+                  example: 30.0
+                alert_seconds:
+                  type: integer
+                  description: 预警间隔（秒）
+                  example: 300
+                is_active:
+                  type: boolean
+                  description: 是否激活
+                  example: true
+      responses:
+        '200':
+          description: 管理成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/device/manage_distance_threshold:
+    post:
+      summary: 管理距离阈值
+      description: 管理距离预警阈值
+      tags:
+        - 预警系统
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_id:
+                  type: string
+                  description: 设备ID
+                  example: esp32_001
+                distance_min:
+                  type: number
+                  format: float
+                  description: 距离最小值
+                  example: 20.0
+                alert_seconds:
+                  type: integer
+                  description: 预警间隔（秒）
+                  example: 300
+                is_active:
+                  type: boolean
+                  description: 是否激活
+                  example: true
+      responses:
+        '200':
+          description: 管理成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/device/distance_threshold:
+    post:
+      summary: 接受距离阈值
+      description: 设置距离预警阈值
+      tags:
+        - 预警系统
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_id:
+                  type: string
+                  description: 设备ID
+                  example: esp32_001
+                distance_min:
+                  type: number
+                  format: float
+                  description: 距离最小值
+                  example: 20.0
+                alert_seconds:
+                  type: integer
+                  description: 预警间隔（秒）
+                  example: 300
+                is_active:
+                  type: boolean
+                  description: 是否激活
+                  example: true
+      responses:
+        '200':
+          description: 设置成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/logs/search:
+    get:
+      summary: 搜索日志
+      description: 支持多条件组合搜索传感器数据
+      tags:
+        - Elasticsearch
+      parameters:
+        - name: level
+          in: query
+          description: 日志级别
+          schema:
+            type: string
+        - name: service
+          in: query
+          description: 服务名称
+          schema:
+            type: string
+        - name: category
+          in: query
+          description: 类别
+          schema:
+            type: string
+        - name: device_id
+          in: query
+          description: 设备ID
+          schema:
+            type: string
+        - name: start_date
+          in: query
+          description: 开始日期
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          description: 每页大小
+          schema:
+            type: integer
+            default: 20
+        - name: min_temp
+          in: query
+          description: 最小温度
+          schema:
+            type: number
+            format: float
+        - name: max_temp
+          in: query
+          description: 最大温度
+          schema:
+            type: number
+            format: float
+        - name: min_hum
+          in: query
+          description: 最小湿度
+          schema:
+            type: number
+            format: float
+        - name: max_hum
+          in: query
+          description: 最大湿度
+          schema:
+            type: number
+            format: float
+        - name: min_dist
+          in: query
+          description: 最小距离
+          schema:
+            type: number
+            format: float
+        - name: max_dist
+          in: query
+          description: 最大距离
+          schema:
+            type: number
+            format: float
+      responses:
+        '200':
+          description: 搜索成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          hits:
+                            type: object
+                            properties:
+                              total:
+                                type: object
+                                properties:
+                                  value:
+                                    type: integer
+                                  relation:
+                                    type: string
+                              hits:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    _source:
+                                      $ref: '#/components/schemas/LogEntry'
+
+  /api/logs/stats:
+    get:
+      summary: 获取统计信息
+      description: 获取数据的平均值、最大值、最小值等统计信息
+      tags:
+        - Elasticsearch
+      parameters:
+        - name: device_id
+          in: query
+          description: 设备ID
+          schema:
+            type: string
+        - name: start_date
+          in: query
+          description: 开始日期
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          aggregations:
+                            type: object
+                            properties:
+                              avg_temp:
+                                type: object
+                                properties:
+                                  value:
+                                    type: number
+                                    format: float
+                              avg_humidity:
+                                type: object
+                                properties:
+                                  value:
+                                    type: number
+                                    format: float
+                              avg_distance:
+                                type: object
+                                properties:
+                                  value:
+                                    type: number
+                                    format: float
+                              max_temp:
+                                type: object
+                                properties:
+                                  value:
+                                    type: number
+                                    format: float
+                              min_temp:
+                                type: object
+                                properties:
+                                  value:
+                                    type: number
+                                    format: float
+                              max_humidity:
+                                type: object
+                                properties:
+                                  value:
+                                    type: number
+                                    format: float
+                              min_humidity:
+                                type: object
+                                properties:
+                                  value:
+                                    type: number
+                                    format: float
+                              max_distance:
+                                type: object
+                                properties:
+                                  value:
+                                    type: number
+                                    format: float
+                              min_distance:
+                                type: object
+                                properties:
+                                  value:
+                                    type: number
+                                    format: float
+
+  /api/logs/device/{device_id}:
+    get:
+      summary: 获取设备日志
+      description: 查询特定设备的所有历史数据
+      tags:
+        - Elasticsearch
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          description: 设备ID
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          description: 每页大小
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          hits:
+                            type: object
+                            properties:
+                              total:
+                                type: object
+                                properties:
+                                  value:
+                                    type: integer
+                                  relation:
+                                    type: string
+                              hits:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    _source:
+                                      $ref: '#/components/schemas/LogEntry'
+
+  /api/sse:
+    get:
+      summary: SSE实时数据推送
+      description: 服务器推送事件，用于实时数据更新
+      tags:
+        - 实时通信
+      responses:
+        '200':
+          description: 连接成功
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /esp32/data:
+    get:
+      summary: WebSocket连接
+      description: 双向实时通信，用于设备数据传输
+      tags:
+        - 实时通信
+      responses:
+        '101':
+          description: 切换协议成功
+        '400':
+          description: 连接失败
+
+components:
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        status_code:
+          type: integer
+          description: 状态码
+          example: 200
+        message:
+          type: string
+          description: 消息
+          example: 操作成功
+        success:
+          type: boolean
+          description: 是否成功
+          example: true
+        data:
+          type: object
+          description: 数据
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: 状态码
+          example: 400
+        message:
+          type: string
+          description: 错误消息
+          example: 参数错误
+        success:
+          type: boolean
+          description: 是否成功
+          example: false
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 用户ID
+          example: 1
+        username:
+          type: string
+          description: 用户名
+          example: testuser
+        email:
+          type: string
+          description: 邮箱
+          example: test@example.com
+        address:
+          type: string
+          description: 地址
+          example: 北京市
+        phone:
+          type: string
+          description: 手机号
+          example: 13800138000
+        education:
+          type: string
+          description: 教育程度
+          example: 本科
+        avatar:
+          type: string
+          description: 头像
+          example: ''
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: '2026-03-14T07:04:37Z'
+
+    LogEntry:
+      type: object
+      properties:
+        '@timestamp':
+          type: string
+          format: date-time
+          description: 时间戳
+          example: '2026-03-16T12:00:00Z'
+        level:
+          type: string
+          description: 日志级别
+          example: INFO
+        message:
+          type: string
+          description: 日志消息
+          example: 传感器数据
+        service:
+          type: string
+          description: 服务名称
+          example: sensor
+        category:
+          type: string
+          description: 类别
+          example: data
+        device_id:
+          type: string
+          description: 设备ID
+          example: esp32_001
+        temperature:
+          type: number
+          format: float
+          description: 温度
+          example: 25.5
+        humidity:
+          type: number
+          format: float
+          description: 湿度
+          example: 55.2
+        distance:
+          type: number
+          format: float
+          description: 距离
+          example: 15.3
+        details:
+          type: object
+          description: 详细信息
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth: []

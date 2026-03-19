@@ -48,7 +48,7 @@ func StartSensorDataConsumer() {
 
 		// 执行阈值检查与报警（原来的异步逻辑移到这里）
 		//go processTempHumidityAlert(req.DeviceID, req.Temperature, req.Humidity)
-		//go processDistanceAlert(req.DeviceID, req.Distance)
+		//go ProcessDistanceAlert(req.DeviceID, req.Distance)
 
 		// 处理成功，手动确认
 		msg.Ack(false)
