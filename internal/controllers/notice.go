@@ -703,6 +703,9 @@ func ProcessTempHumidityAlert(userID uint, deviceID string, temperature, humidit
 		}
 	}
 
+	// 记录提醒
+	service.CreateNotification(userID, deviceID, service.NotificationTypeAlert, alertMessage)
+
 	// 异步推送
 	go func() {
 		title := fmt.Sprintf("设备[%s] 温湿度预警", deviceID)
@@ -865,6 +868,9 @@ func ProcessDistanceAlert(userID uint, deviceID string, distance float64) {
 			redis.Client.Set(ctx, barkTokenCacheKey, data, 1*time.Hour)
 		}
 	}
+
+	// 记录提醒
+	service.CreateNotification(userID, deviceID, service.NotificationTypeAlert, alertMessage)
 
 	// 异步推送
 	go func() {
@@ -1303,6 +1309,20 @@ func BindDevice(c *gin.Context) {
 	}
 	userID := uint(userIDFloat.(float64))
 
+	// 激活码限流检查
+	ctx := context.Background()
+	activationCodeKey := fmt.Sprintf("activation_code:limit:%s", req.ActivationCode)
+	
+	// 检查激活码使用次数
+	count, err := redis.Client.Get(ctx, activationCodeKey).Int()
+	if err == nil && count >= 3 { // 每个激活码最多使用3次
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "激活码已达到使用上限",
+		})
+		return
+	}
+
 	// 查找设备出厂配置
 	var factoryConfig model.DeviceFactoryConfig
 	if err := model.DB.Where("device_id = ? AND activation_code = ?", req.DeviceID, req.ActivationCode).First(&factoryConfig).Error; err != nil {
@@ -1365,16 +1385,23 @@ func BindDevice(c *gin.Context) {
 		return
 	}
 
+	// 增加激活码使用次数
+	ctx = context.Background()
+	activationCodeKey = fmt.Sprintf("activation_code:limit:%s", req.ActivationCode)
+	redis.Client.Incr(ctx, activationCodeKey)
+	// 设置过期时间为24小时
+	redis.Client.Expire(ctx, activationCodeKey, 24*time.Hour)
+
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
 		"message": "设备绑定成功",
 		"data": gin.H{
-			"device_id":    factoryConfig.DeviceID,
-			"device_name":  userDevice.DeviceName,
-			"secret_key":   factoryConfig.SecretKey,
-			"is_activated": factoryConfig.IsActivated,
-			"bound_at":     userDevice.CreatedAt,
-			"info":         "请将此device_id和secret_key配置到设备中，设备上传数据时需要使用此device_id",
+			"device_id":     factoryConfig.DeviceID,
+			"device_name":   userDevice.DeviceName,
+			"secret_key":    factoryConfig.SecretKey,
+			"is_activated":  factoryConfig.IsActivated,
+			"bound_at":      userDevice.CreatedAt,
+			"info": "请将此device_id和secret_key配置到设备中，设备上传数据时需要使用此device_id",
 		},
 	})
 }
@@ -1488,5 +1515,94 @@ func GetUserDevices(c *gin.Context) {
 		"code":    200,
 		"message": "获取设备列表成功",
 		"data":    deviceInfos,
+	})
+}
+
+// 获取用户的提醒列表
+func GetUserNotifications(c *gin.Context) {
+	// 获取当前用户ID
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "请先登录",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	// 获取查询参数
+	limit := 20 // 默认获取20条
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := fmt.Sscanf(limitStr, "%d", &limit); err != nil || l != 1 {
+			limit = 20
+		}
+	}
+
+	// 获取提醒列表
+	notifications, err := service.GetUserNotifications(userID, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取提醒列表失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取未读提醒数量
+	unreadCount, err := service.GetUnreadNotificationCount(userID)
+	if err != nil {
+		unreadCount = 0
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":          200,
+		"message":       "获取提醒列表成功",
+		"data":          notifications,
+		"unread_count":  unreadCount,
+		"total_count":   len(notifications),
+	})
+}
+
+// 标记提醒为已读
+func MarkNotificationAsRead(c *gin.Context) {
+	// 获取当前用户ID
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "请先登录",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	// 获取提醒ID
+	notificationIDStr := c.Param("id")
+	var notificationID uint
+	if _, err := fmt.Sscanf(notificationIDStr, "%d", &notificationID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的提醒ID",
+		})
+		return
+	}
+
+	// 标记为已读
+	if err := service.MarkNotificationAsRead(notificationID, userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "标记提醒为已读失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "提醒已标记为已读",
+		"data": gin.H{
+			"notification_id": notificationID,
+			"is_read":        true,
+		},
 	})
 }

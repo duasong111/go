@@ -111,6 +111,19 @@ func sendOnlineAlert(config model.DeviceOfflineConfig) {
 		return
 	}
 
+	// 记录提醒
+	message := fmt.Sprintf("设备[%s]已重新上线，恢复正常通信", config.DeviceID)
+	notification := model.NotificationLog{
+		UserID:   config.UserID,
+		DeviceID: config.DeviceID,
+		Type:     "online",
+		Message:  message,
+		IsRead:   false,
+	}
+	if err := model.DB.Create(&notification).Error; err != nil {
+		log.Printf("创建提醒记录失败: %v", err)
+	}
+
 	// 获取用户的 Bark Token
 	var barkToken model.BarkToken
 	if err := model.DB.Where("user_id = ? AND is_active = true", config.UserID).First(&barkToken).Error; err != nil {
@@ -236,6 +249,10 @@ func sendOfflineAlert(config model.DeviceOfflineConfig) {
 	redis.Client.Incr(ctx, alertCountKey)
 	// 设置过期时间（24小时）
 	redis.Client.Expire(ctx, alertCountKey, 24*time.Hour)
+
+	// 记录提醒
+	message := fmt.Sprintf("设备[%s]长时间未上报数据，可能已离线", config.DeviceID)
+	CreateNotification(config.UserID, config.DeviceID, NotificationTypeOffline, message)
 
 	// 获取用户的 Bark Token
 	var barkToken model.BarkToken

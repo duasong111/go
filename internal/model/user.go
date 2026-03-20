@@ -150,3 +150,20 @@ func (u *UserDevice) BeforeCreate(tx *gorm.DB) error {
  type DeviceUnbindRequest struct {
 	DeviceID string `json:"device_id" binding:"required"`
 }
+
+// 提醒记录表
+ type NotificationLog struct {
+	ID        uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID    uint           `gorm:"index;not null" json:"user_id"`           // 用户ID
+	DeviceID  string         `gorm:"size:64;index" json:"device_id"`           // 设备ID
+	Type      string         `gorm:"size:32;not null" json:"type"`             // 提醒类型: alert, offline, online, system
+	Message   string         `gorm:"size:255;not null" json:"message"`          // 提醒消息
+	IsRead    bool           `gorm:"default:false" json:"is_read"`            // 是否已读
+	CreatedAt time.Time      `gorm:"autoCreateTime" json:"created_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// 设置表名
+func (NotificationLog) TableName() string {
+	return "notification_logs"
+}
