@@ -5,7 +5,7 @@ server:
 
 # PostgresSQL 数据库配置
 database:
-  host: 10.1.1.136
+  host: 192.168.18.204
   port: 5432
   user: postgres
   password: gsm200818534
@@ -14,7 +14,7 @@ database:
 
 # Redis 配置
 redis:
-  host: 10.1.1.136
+  host: 192.168.18.204
   port: 6379
   password: gsm200818534
   db: 0
