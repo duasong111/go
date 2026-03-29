@@ -216,8 +216,35 @@ func checkDeviceOffline() {
 
 // sendOfflineAlert 发送设备离线报警
 func sendOfflineAlert(config model.DeviceOfflineConfig) {
-	// 检查是否在报警冷却期
+	// 再次检查设备是否仍然离线
 	ctx := context.Background()
+	key := fmt.Sprintf("device:%d:%s:last_active", config.UserID, config.DeviceID)
+	lastActiveStr, err := redis.Client.Get(ctx, key).Result()
+	if err != nil {
+		// 没有记录，可能是设备从未上线
+		return
+	}
+
+	// 解析时间戳
+	var lastActive int64
+	_, err = fmt.Sscanf(lastActiveStr, "%d", &lastActive)
+	if err != nil {
+		log.Printf("解析时间戳失败: %v", err)
+		return
+	}
+
+	// 再次检查是否离线
+	currentTime := time.Now().Unix()
+	if currentTime-lastActive <= int64(config.OfflineThreshold) {
+		// 设备已经上线，不再发送离线通知
+		// 重置离线通知次数计数器
+		alertCountKey := fmt.Sprintf("alert:count:offline:%d:%s", config.UserID, config.DeviceID)
+		redis.Client.Del(ctx, alertCountKey)
+		log.Printf("设备 %s 已上线，取消离线通知", config.DeviceID)
+		return
+	}
+
+	// 检查是否在报警冷却期
 	// 使用 user_id + device_id 作为键，确保不同用户的设备不会混淆
 	cooldownKey := fmt.Sprintf("alert:cooldown:offline:%d:%s", config.UserID, config.DeviceID)
 	setOK, err := redis.Client.SetNX(ctx, cooldownKey, "1", time.Duration(config.AlertInterval)*time.Second).Result()
