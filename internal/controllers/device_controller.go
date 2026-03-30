@@ -18,6 +18,7 @@ import (
 
 // 控制灯
 type LedControlRequest struct {
+	DeviceID   string `json:"device_id" binding:"required"`
 	State      string `json:"state" binding:"required,oneof=on off"`
 	Color      string `json:"color,omitempty"`
 	Brightness *int   `json:"brightness,omitempty"`
@@ -25,6 +26,7 @@ type LedControlRequest struct {
 
 // 控制文字
 type ScreenTextRequest struct {
+	DeviceID        string `json:"device_id" binding:"required"`
 	Text            string `json:"text" binding:"required,max=200"` // 文字，必填，限制长度
 	Duration        int    `json:"duration,omitempty"`              // 显示秒数，可选
 	Scroll          bool   `json:"scroll,omitempty"`                // 是否滚动，可选
@@ -36,12 +38,14 @@ type ScreenTextRequest struct {
 
 // 上传图片
 type ScreenImageRequest struct {
+	DeviceID string `form:"device_id" binding:"required"`
 	Duration int    `form:"duration"`
 	Fit      string `form:"fit"` // cover, contain, fill
 }
 
 // 图片的url
 type ScreenImageUrlRequest struct {
+	DeviceID string `json:"device_id" binding:"required"`
 	Url      string `json:"url" binding:"required"`
 	Duration int    `json:"duration"`
 	Fit      string `json:"fit"` // cover, contain, fill
@@ -49,6 +53,7 @@ type ScreenImageUrlRequest struct {
 
 // 控制蜂鸣器
 type BuzzerControlRequest struct {
+	DeviceID  string `json:"device_id" binding:"required"`
 	State     string `json:"state" binding:"required,oneof=on off"`
 	Frequency *int   `json:"frequency,omitempty"` // 频率 Hz
 	Duration  *int   `json:"duration,omitempty"`  // 每个蜂鸣 ms
@@ -95,7 +100,8 @@ func ControlLed(c *gin.Context) {
 	}
 
 	// 发送到 MQTT
-	err := service.Publish("control/esp32", 0, false, payload)
+	topic := "devices/" + req.DeviceID + "/control"
+	err := service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
@@ -162,7 +168,8 @@ func SendScreenText(c *gin.Context) {
 	}
 
 	// 发送到 MQTT
-	err := service.Publish("control/esp32", 0, false, payload)
+	topic := "devices/" + req.DeviceID + "/control"
+	err := service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
@@ -252,7 +259,8 @@ func UploadAndSendImage(c *gin.Context) {
 	}
 
 	// 发送到 MQTT（建议用独立主题）
-	err = service.Publish("control/esp32", 0, false, payload)
+	topic := "devices/" + req.DeviceID + "/control"
+	err = service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "MQTT 发送失败"})
 		return
@@ -342,7 +350,8 @@ func SendScreenImageFromUrl(c *gin.Context) {
 	}
 
 	// 发送 MQTT
-	err = service.Publish("control/esp32", 0, false, payload)
+	topic := "devices/" + req.DeviceID + "/control"
+	err = service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "MQTT 发送失败"})
 		return
@@ -435,7 +444,8 @@ func ControlBuzzer(c *gin.Context) {
 	}
 
 	// 发送到 MQTT
-	err := service.Publish("control/esp32", 0, false, payload)
+	topic := "devices/" + req.DeviceID + "/control"
+	err := service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
