@@ -63,7 +63,7 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	protectedAPI.POST("/device/bind", controllers.BindDevice)                            // 设备绑定
 	protectedAPI.POST("/device/unbind", controllers.UnbindDevice)                        // 设备解绑
 	protectedAPI.GET("/device/list", controllers.GetUserDevices)                         // 获取用户设备列表
-	protectedAPI.GET("/notifications", controllers.GetUserNotifications)                // 获取用户提醒列表
-	protectedAPI.PUT("/notifications/:id/read", controllers.MarkNotificationAsRead)     // 标记提醒为已读
+	protectedAPI.GET("/notifications", controllers.GetUserNotifications)                 // 获取用户提醒列表
+	protectedAPI.PUT("/notifications/:id/read", controllers.MarkNotificationAsRead)      // 标记提醒为已读
 
 }

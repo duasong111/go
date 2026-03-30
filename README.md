@@ -397,10 +397,12 @@ POST /api/device/sensor_data
     ↓
 Go 后端处理
     ↓
-1. 存储到 PostgreSQL（用户信息、配置等）
+1. 存储到 PostgreSQL（用户信息、设备配置、阈值设置、通知记录）
 2. 索引到 Elasticsearch（传感器数据）
-3. 发送到 RabbitMQ（异步任务）
-4. 缓存到 Redis（频繁访问的数据）
+3. 发送到 RabbitMQ（异步任务，如消息通知）
+4. 缓存到 Redis（设备最后活跃时间、单点登录信息）
+5. 设备离线检测（使用Redis监测设备状态）
+6. 设备绑定验证（确保设备与用户关联）
     ↓
 API 接口查询
     ↓
