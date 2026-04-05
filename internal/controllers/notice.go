@@ -1107,6 +1107,7 @@ func ManageDistanceThreshold(c *gin.Context) {
 
 // 9. 根据配置的报警行为触发设备
 func triggerDeviceByAlertAction(deviceID string, alertAction string, ledColor string) {
+	topic := "devices/" + deviceID + "/control"
 	switch alertAction {
 	case "buzzer":
 		// 只触发蜂鸣器
@@ -1118,7 +1119,7 @@ func triggerDeviceByAlertAction(deviceID string, alertAction string, ledColor st
 			"cycles":    3,
 			"interval":  500,
 		}
-		service.Publish("control/esp32", 0, false, buzzerPayload)
+		service.Publish(topic, 0, false, buzzerPayload)
 
 	case "led":
 		// 只触发LED灯
@@ -1130,7 +1131,7 @@ func triggerDeviceByAlertAction(deviceID string, alertAction string, ledColor st
 			"interval":   500,
 			"duration":   5000,
 		}
-		service.Publish("control/esp32", 0, false, ledPayload)
+		service.Publish(topic, 0, false, ledPayload)
 
 	case "both":
 		// 同时触发蜂鸣器和LED灯
@@ -1142,7 +1143,7 @@ func triggerDeviceByAlertAction(deviceID string, alertAction string, ledColor st
 			"cycles":    3,
 			"interval":  500,
 		}
-		service.Publish("control/esp32", 0, false, buzzerPayload)
+		service.Publish(topic, 0, false, buzzerPayload)
 
 		ledPayload := map[string]interface{}{
 			"state":      "on",
@@ -1152,7 +1153,7 @@ func triggerDeviceByAlertAction(deviceID string, alertAction string, ledColor st
 			"interval":   500,
 			"duration":   5000,
 		}
-		service.Publish("control/esp32", 0, false, ledPayload)
+		service.Publish(topic, 0, false, ledPayload)
 	}
 }
 
@@ -1269,7 +1270,8 @@ func ControlDevices(c *gin.Context) {
 		}
 
 		// 发送到 MQTT
-		err := service.Publish("control/esp32", 0, false, payload)
+		topic := "devices/" + req.DeviceID + "/control"
+		err := service.Publish(topic, 0, false, payload)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    500,

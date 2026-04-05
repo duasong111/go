@@ -121,8 +121,8 @@ func ControlLed(c *gin.Context) {
 		payload["brightness"] = 0
 	}
 
-	// 发送到 MQTT，使用设备ID作为主题的一部分
-	topic := "control/" + req.DeviceID
+	// 发送到 MQTT
+	topic := "devices/" + req.DeviceID + "/control"
 	err := service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -133,9 +133,9 @@ func ControlLed(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    200,
-		"message": "灯控制命令已发送",
-		"sent":    payload,
+		"code":      200,
+		"message":   "灯控制命令已发送",
+		"sent":      payload,
 		"device_id": req.DeviceID,
 	})
 }
@@ -211,8 +211,8 @@ func SendScreenText(c *gin.Context) {
 		payload["font"] = req.Font
 	}
 
-	// 发送到 MQTT，使用设备ID作为主题的一部分
-	topic := "control/" + req.DeviceID
+	// 发送到 MQTT
+	topic := "devices/" + req.DeviceID + "/control"
 	err := service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -223,9 +223,9 @@ func SendScreenText(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    200,
-		"message": "文字已发送到屏幕",
-		"sent":    payload,
+		"code":      200,
+		"message":   "文字已发送到屏幕",
+		"sent":      payload,
 		"device_id": req.DeviceID,
 	})
 }
@@ -324,8 +324,8 @@ func UploadAndSendImage(c *gin.Context) {
 		payload["duration"] = 10
 	}
 
-	// 发送到 MQTT，使用设备ID作为主题的一部分
-	topic := "control/" + req.DeviceID
+	// 发送到 MQTT（建议用独立主题）
+	topic := "devices/" + req.DeviceID + "/control"
 	err = service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "MQTT 发送失败"})
@@ -437,8 +437,8 @@ func SendScreenImageFromUrl(c *gin.Context) {
 		payload["duration"] = 10
 	}
 
-	// 发送 MQTT，使用设备ID作为主题的一部分
-	topic := "control/" + req.DeviceID
+	// 发送 MQTT
+	topic := "devices/" + req.DeviceID + "/control"
 	err = service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "MQTT 发送失败"})
@@ -553,8 +553,8 @@ func ControlBuzzer(c *gin.Context) {
 		payload["cycles"] = 0
 	}
 
-	// 发送到 MQTT，使用设备ID作为主题的一部分
-	topic := "control/" + req.DeviceID
+	// 发送到 MQTT
+	topic := "devices/" + req.DeviceID + "/control"
 	err := service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
