@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"awesomeProject/internal/model"
 	"awesomeProject/internal/service"
 	"bytes"
 	"encoding/base64"
@@ -18,6 +19,7 @@ import (
 
 // 控制灯
 type LedControlRequest struct {
+	DeviceID   string `json:"device_id" binding:"required"`
 	State      string `json:"state" binding:"required,oneof=on off"`
 	Color      string `json:"color,omitempty"`
 	Brightness *int   `json:"brightness,omitempty"`
@@ -25,6 +27,7 @@ type LedControlRequest struct {
 
 // 控制文字
 type ScreenTextRequest struct {
+	DeviceID        string `json:"device_id" binding:"required"`
 	Text            string `json:"text" binding:"required,max=200"` // 文字，必填，限制长度
 	Duration        int    `json:"duration,omitempty"`              // 显示秒数，可选
 	Scroll          bool   `json:"scroll,omitempty"`                // 是否滚动，可选
@@ -36,12 +39,14 @@ type ScreenTextRequest struct {
 
 // 上传图片
 type ScreenImageRequest struct {
+	DeviceID string `form:"device_id" binding:"required"`
 	Duration int    `form:"duration"`
 	Fit      string `form:"fit"` // cover, contain, fill
 }
 
 // 图片的url
 type ScreenImageUrlRequest struct {
+	DeviceID string `json:"device_id" binding:"required"`
 	Url      string `json:"url" binding:"required"`
 	Duration int    `json:"duration"`
 	Fit      string `json:"fit"` // cover, contain, fill
@@ -49,6 +54,7 @@ type ScreenImageUrlRequest struct {
 
 // 控制蜂鸣器
 type BuzzerControlRequest struct {
+	DeviceID  string `json:"device_id" binding:"required"`
 	State     string `json:"state" binding:"required,oneof=on off"`
 	Frequency *int   `json:"frequency,omitempty"` // 频率 Hz
 	Duration  *int   `json:"duration,omitempty"`  // 每个蜂鸣 ms
@@ -62,6 +68,27 @@ func ControlLed(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
 			"message": "参数格式错误：" + err.Error(),
+		})
+		return
+	}
+
+	// 验证设备是否绑定到当前用户
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "请先登录",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	// 检查设备是否绑定到当前用户
+	var userDevice model.UserDevice
+	if err := model.DB.Where("user_id = ? AND device_id = ?", userID, req.DeviceID).First(&userDevice).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":    403,
+			"message": "设备未绑定到当前用户",
 		})
 		return
 	}
@@ -94,8 +121,9 @@ func ControlLed(c *gin.Context) {
 		payload["brightness"] = 0
 	}
 
-	// 发送到 MQTT
-	err := service.Publish("control/esp32", 0, false, payload)
+	// 发送到 MQTT，使用设备ID作为主题的一部分
+	topic := "control/" + req.DeviceID
+	err := service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
@@ -108,6 +136,7 @@ func ControlLed(c *gin.Context) {
 		"code":    200,
 		"message": "灯控制命令已发送",
 		"sent":    payload,
+		"device_id": req.DeviceID,
 	})
 }
 
@@ -117,6 +146,27 @@ func SendScreenText(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
 			"message": "参数格式错误：" + err.Error(),
+		})
+		return
+	}
+
+	// 验证设备是否绑定到当前用户
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "请先登录",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	// 检查设备是否绑定到当前用户
+	var userDevice model.UserDevice
+	if err := model.DB.Where("user_id = ? AND device_id = ?", userID, req.DeviceID).First(&userDevice).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":    403,
+			"message": "设备未绑定到当前用户",
 		})
 		return
 	}
@@ -161,8 +211,9 @@ func SendScreenText(c *gin.Context) {
 		payload["font"] = req.Font
 	}
 
-	// 发送到 MQTT
-	err := service.Publish("control/esp32", 0, false, payload)
+	// 发送到 MQTT，使用设备ID作为主题的一部分
+	topic := "control/" + req.DeviceID
+	err := service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
@@ -175,6 +226,7 @@ func SendScreenText(c *gin.Context) {
 		"code":    200,
 		"message": "文字已发送到屏幕",
 		"sent":    payload,
+		"device_id": req.DeviceID,
 	})
 }
 
@@ -182,6 +234,27 @@ func UploadAndSendImage(c *gin.Context) {
 	var req ScreenImageRequest
 	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误"})
+		return
+	}
+
+	// 验证设备是否绑定到当前用户
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "请先登录",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	// 检查设备是否绑定到当前用户
+	var userDevice model.UserDevice
+	if err := model.DB.Where("user_id = ? AND device_id = ?", userID, req.DeviceID).First(&userDevice).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":    403,
+			"message": "设备未绑定到当前用户",
+		})
 		return
 	}
 
@@ -251,16 +324,18 @@ func UploadAndSendImage(c *gin.Context) {
 		payload["duration"] = 10
 	}
 
-	// 发送到 MQTT（建议用独立主题）
-	err = service.Publish("control/esp32", 0, false, payload)
+	// 发送到 MQTT，使用设备ID作为主题的一部分
+	topic := "control/" + req.DeviceID
+	err = service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "MQTT 发送失败"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "图片已发送到屏幕",
-		"size_kb": len(imgData) / 1024,
+		"message":   "图片已发送到屏幕",
+		"size_kb":   len(imgData) / 1024,
+		"device_id": req.DeviceID,
 	})
 }
 
@@ -270,6 +345,27 @@ func SendScreenImageFromUrl(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
 			"message": "参数错误：" + err.Error(),
+		})
+		return
+	}
+
+	// 验证设备是否绑定到当前用户
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "请先登录",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	// 检查设备是否绑定到当前用户
+	var userDevice model.UserDevice
+	if err := model.DB.Where("user_id = ? AND device_id = ?", userID, req.DeviceID).First(&userDevice).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":    403,
+			"message": "设备未绑定到当前用户",
 		})
 		return
 	}
@@ -341,16 +437,18 @@ func SendScreenImageFromUrl(c *gin.Context) {
 		payload["duration"] = 10
 	}
 
-	// 发送 MQTT
-	err = service.Publish("control/esp32", 0, false, payload)
+	// 发送 MQTT，使用设备ID作为主题的一部分
+	topic := "control/" + req.DeviceID
+	err = service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "MQTT 发送失败"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"code":    200,
-		"message": "图片已从 URL 下载并发送到屏幕",
-		"size_kb": len(finalData) / 1024,
+		"code":      200,
+		"message":   "图片已从 URL 下载并发送到屏幕",
+		"size_kb":   len(finalData) / 1024,
+		"device_id": req.DeviceID,
 	})
 }
 
@@ -360,6 +458,27 @@ func ControlBuzzer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
 			"message": "参数格式错误：" + err.Error(),
+		})
+		return
+	}
+
+	// 验证设备是否绑定到当前用户
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "请先登录",
+		})
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	// 检查设备是否绑定到当前用户
+	var userDevice model.UserDevice
+	if err := model.DB.Where("user_id = ? AND device_id = ?", userID, req.DeviceID).First(&userDevice).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":    403,
+			"message": "设备未绑定到当前用户",
 		})
 		return
 	}
@@ -434,8 +553,9 @@ func ControlBuzzer(c *gin.Context) {
 		payload["cycles"] = 0
 	}
 
-	// 发送到 MQTT
-	err := service.Publish("control/esp32", 0, false, payload)
+	// 发送到 MQTT，使用设备ID作为主题的一部分
+	topic := "control/" + req.DeviceID
+	err := service.Publish(topic, 0, false, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
@@ -445,8 +565,9 @@ func ControlBuzzer(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    200,
-		"message": "蜂鸣器命令已发送",
-		"sent":    payload,
+		"code":      200,
+		"message":   "蜂鸣器命令已发送",
+		"sent":      payload,
+		"device_id": req.DeviceID,
 	})
 }
