@@ -1,69 +1,168 @@
 package pkg
 
-type BarkTokenRequest struct {
-	Token  string `json:"token" binding:"required"` // Bark 的 key，例如 "xxxxxx" (api.day.app/xxxxxx/)
-	Device string `json:"device,omitempty"`         // 可选：用户备注这个 token 属于哪个手机
-}
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+)
 
+// 温度阈值请求
 type ThresholdRequest struct {
-	DeviceID     string   `json:"device_id" binding:"required"` // 设备唯一标识
-	TempMax      *float64 `json:"temp_max"`                     // 温度上限，null = 不监控
-	TempMin      *float64 `json:"temp_min"`                     // 温度下限
-	HumidityMax  *float64 `json:"humidity_max"`                 // 湿度上限
-	HumidityMin  *float64 `json:"humidity_min"`                 // 湿度下限
-	AlertSeconds int      `json:"alert_seconds,omitempty"`      // 报警最小间隔秒数，默认 300（5分钟）
-	IsActive     bool     `json:"is_active,omitempty"`          // 是否启用，默认 true
+	DeviceID       string   `json:"device_id" binding:"required"`
+	TemperatureMin *float64 `json:"temperature_min,omitempty"`
+	TemperatureMax *float64 `json:"temperature_max,omitempty"`
+	HumidityMin    *float64 `json:"humidity_min,omitempty"`
+	HumidityMax    *float64 `json:"humidity_max,omitempty"`
+	AlertInterval  int      `json:"alert_interval" binding:"required"`
+	IsActive       bool     `json:"is_active"`
+	AlertAction    string   `json:"alert_action"`
+	LedColor       string   `json:"led_color"`
 }
 
-// 阈值查询和修改请求（升级版）
-type ThresholdManageRequest struct {
-	DeviceID     string  `json:"device_id" binding:"required"` // 设备唯一标识
-	TempMax      *float64 `json:"temp_max,omitempty"`       // 温度上限，null = 不监控
-	TempMin      *float64 `json:"temp_min,omitempty"`       // 温度下限
-	HumidityMax  *float64 `json:"humidity_max,omitempty"`   // 湿度上限
-	HumidityMin  *float64 `json:"humidity_min,omitempty"`   // 湿度下限
-	AlertSeconds int     `json:"alert_seconds,omitempty"`    // 报警最小间隔秒数，默认 300（5分钟）
-	IsActive     bool    `json:"is_active,omitempty"`     // 是否启用，默认 true
-	AlertAction  string  `json:"alert_action,omitempty"`  // 报警行为：buzzer(蜂鸣器), led(灯), both(两者)
-	LedColor     string  `json:"led_color,omitempty"`     // LED灯颜色：red, blue, yellow, white
-}
-
-type DeviceAlertRequest struct {
-	DeviceID    string  `json:"device_id" binding:"required"`
-	Temperature float64 `json:"temperature"`
-	Humidity    float64 `json:"humidity"`
-}
-
-// 距离阈值设置请求
-type DistanceThresholdRequest struct {
-	DeviceID     string  `json:"device_id" binding:"required"` // 设备唯一标识
-	DistanceMin  *float64 `json:"distance_min"`                 // 距离下限（小于此值报警），null = 不监控
-	AlertSeconds int     `json:"alert_seconds,omitempty"`      // 报警最小间隔秒数，默认 300（5分钟）
-	IsActive     bool    `json:"is_active,omitempty"`     // 是否启用，默认 true
-}
-
-// 距离阈值查询和修改请求（升级版）
 type DistanceThresholdManageRequest struct {
-	DeviceID     string  `json:"device_id" binding:"required"` // 设备唯一标识
-	DistanceMin  *float64 `json:"distance_min,omitempty"`     // 距离下限（小于此值报警），null = 不监控
-	AlertSeconds int     `json:"alert_seconds,omitempty"`  // 报警最小间隔秒数，默认 300（5分钟）
-	IsActive     bool    `json:"is_active,omitempty"`     // 是否启用，默认 true
-	AlertAction  string  `json:"alert_action,omitempty"`  // 报警行为：buzzer(蜂鸣器), led(灯), both(两者)
-	LedColor     string  `json:"led_color,omitempty"`     // LED灯颜色：red, blue, yellow, white
+	DeviceID     string   `json:"device_id" binding:"required"`
+	DistanceMin  *float64 `json:"distance_min,omitempty"`
+	AlertSeconds int      `json:"alert_seconds,omitempty"`
+	IsActive     bool     `json:"is_active"`
+	AlertAction  string   `json:"alert_action,omitempty"`
+	LedColor     string   `json:"led_color,omitempty"`
 }
 
-// 距离上报请求
-type DistanceAlertRequest struct {
-	DeviceID string  `json:"device_id" binding:"required"`
-	Distance float64 `json:"distance"` // 当前距离值
+// 距离阈值请求
+type DistanceThresholdRequest struct {
+	DeviceID      string   `json:"device_id" binding:"required"`
+	DistanceMin   *float64 `json:"distance_min,omitempty"`
+	AlertInterval int      `json:"alert_interval" binding:"required"`
+	IsActive      bool     `json:"is_active"`
+	AlertAction   string   `json:"alert_action"`
+	LedColor      string   `json:"led_color"`
+}
+
+// 设备离线监测配置请求
+type DeviceOfflineConfigRequest struct {
+	DeviceID          string `json:"device_id" binding:"required"`
+	OfflineThreshold  int    `json:"offline_threshold" binding:"required"`
+	AlertInterval     int    `json:"alert_interval" binding:"required"`
+	MaxAlertCount     int    `json:"max_alert_count" binding:"required"`
+	IsActive          bool   `json:"is_active"`
+	EnableOnlineAlert bool   `json:"enable_online_alert"`
 }
 
 // 统一传感器数据上报请求（包含温湿度和距离）
 type SensorDataRequest struct {
-	DeviceID    string  `json:"device_id" binding:"required"`
-	SecretKey   string  `json:"secret_key" binding:"required"` // 设备密钥
-	Temperature float64 `json:"temperature"`
-	Humidity    float64 `json:"humidity"`
-	Distance    float64 `json:"distance"`
-	Time        string  `json:"time,omitempty"` // 可选：设备时间
+	DeviceID    string      `json:"device_id" binding:"required"`
+	SecretKey   string      `json:"secret_key" binding:"required"` // 设备密钥
+	Temperature interface{} `json:"temperature"`
+	Humidity    interface{} `json:"humidity"`
+	Distance    interface{} `json:"distance"`
+	Time        string      `json:"time,omitempty"` // 可选：设备时间
+}
+
+// parseValue 解析值，支持数字和字符串类型
+func (r *SensorDataRequest) parseValue(value interface{}) *float64 {
+	if value == nil {
+		return nil
+	}
+
+	switch v := value.(type) {
+	case string:
+		if v == "" || v == "--" {
+			return nil
+		}
+		val, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return nil
+		}
+		return &val
+	case float64:
+		return &v
+	case float32:
+		val := float64(v)
+		return &val
+	case int:
+		val := float64(v)
+		return &val
+	case int64:
+		val := float64(v)
+		return &val
+	case int32:
+		val := float64(v)
+		return &val
+	default:
+		return nil
+	}
+}
+
+// GetTemperature 获取温度值，处理"--"等特殊值
+func (r *SensorDataRequest) GetTemperature() *float64 {
+	return r.parseValue(r.Temperature)
+}
+
+// GetHumidity 获取湿度值，处理"--"等特殊值
+func (r *SensorDataRequest) GetHumidity() *float64 {
+	return r.parseValue(r.Humidity)
+}
+
+// GetDistance 获取距离值，处理"--"等特殊值
+func (r *SensorDataRequest) GetDistance() *float64 {
+	return r.parseValue(r.Distance)
+}
+
+// IsSensorDataValid 检查传感器数据是否有效
+func (r *SensorDataRequest) IsSensorDataValid() bool {
+	return r.GetTemperature() != nil || r.GetHumidity() != nil || r.GetDistance() != nil
+}
+
+// GetSensorStatus 获取传感器状态
+func (r *SensorDataRequest) GetSensorStatus() map[string]string {
+	status := make(map[string]string)
+
+	if r.GetTemperature() == nil {
+		status["temperature"] = "error"
+	} else {
+		status["temperature"] = "normal"
+	}
+
+	if r.GetHumidity() == nil {
+		status["humidity"] = "error"
+	} else {
+		status["humidity"] = "normal"
+	}
+
+	if r.GetDistance() == nil {
+		status["distance"] = "error"
+	} else {
+		status["distance"] = "normal"
+	}
+
+	return status
+}
+
+// ToJSON 转换为JSON字符串
+func (r *SensorDataRequest) ToJSON() string {
+	data, err := json.Marshal(r)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
+}
+
+// 响应结构
+// APIResponse API响应结构体
+type APIResponse struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
+// 错误响应
+// func ErrorResponse(c interface{}, code int, message string) interface{} {
+// 	// 这里需要根据具体的上下文类型实现
+// 	fmt.Printf("Error: %d - %s\n", code, message)
+// }
+
+// 成功响应
+func SuccessResponse(c interface{}, data interface{}, message string) {
+	// 这里需要根据具体的上下文类型实现
+	fmt.Printf("Success: %s\n", message)
 }

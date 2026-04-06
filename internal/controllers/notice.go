@@ -15,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,7 +23,10 @@ import (
 )
 
 func AcceptBarkToken(c *gin.Context) {
-	var req pkg.BarkTokenRequest
+	var req struct {
+		Token  string `json:"token" binding:"required"`
+		Device string `json:"device"`
+	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
@@ -125,8 +129,8 @@ func AcceptThreshold(c *gin.Context) {
 	}
 
 	// 默认报警间隔 5 分钟
-	if req.AlertSeconds <= 0 {
-		req.AlertSeconds = 300
+	if req.AlertInterval <= 0 {
+		req.AlertInterval = 300
 	}
 
 	var threshold model.Threshold
@@ -138,11 +142,11 @@ func AcceptThreshold(c *gin.Context) {
 		threshold = model.Threshold{
 			UserID:        user.ID,
 			DeviceID:      req.DeviceID,
-			TempMax:       req.TempMax,
-			TempMin:       req.TempMin,
+			TempMax:       req.TemperatureMax,
+			TempMin:       req.TemperatureMin,
 			HumidityMax:   req.HumidityMax,
 			HumidityMin:   req.HumidityMin,
-			AlertInterval: req.AlertSeconds,
+			AlertInterval: req.AlertInterval,
 			IsActive:      req.IsActive,
 		}
 		if err := model.DB.Create(&threshold).Error; err != nil {
@@ -155,11 +159,11 @@ func AcceptThreshold(c *gin.Context) {
 	} else {
 		// 更新现有记录
 		updates := map[string]interface{}{
-			"temp_max":       req.TempMax,
-			"temp_min":       req.TempMin,
+			"temp_max":       req.TemperatureMax,
+			"temp_min":       req.TemperatureMin,
 			"humidity_max":   req.HumidityMax,
 			"humidity_min":   req.HumidityMin,
-			"alert_interval": req.AlertSeconds,
+			"alert_interval": req.AlertInterval,
 			"is_active":      req.IsActive,
 		}
 		if err := model.DB.Model(&threshold).Updates(updates).Error; err != nil {
@@ -185,7 +189,7 @@ func AcceptThreshold(c *gin.Context) {
 // 实践中给设备更新唯一的device_id 并在出厂编号中进行注明
 
 func BarkAlert(c *gin.Context) {
-	var req pkg.DeviceAlertRequest
+	var req pkg.SensorDataRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		//log.Printf("[BarkAlert] 参数绑定失败: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -216,17 +220,21 @@ func BarkAlert(c *gin.Context) {
 
 	// 收集报警信息
 	var alertItems []string
-	if threshold.TempMax != nil && req.Temperature > *threshold.TempMax {
-		alertItems = append(alertItems, fmt.Sprintf("温度过高: %.1f > %.1f", req.Temperature, *threshold.TempMax))
+	temp := req.GetTemperature()
+	if threshold.TempMax != nil && temp != nil && *temp > *threshold.TempMax {
+		alertItems = append(alertItems, fmt.Sprintf("温度过高: %.1f > %.1f", *temp, *threshold.TempMax))
 	}
-	if threshold.TempMin != nil && req.Temperature < *threshold.TempMin {
-		alertItems = append(alertItems, fmt.Sprintf("温度过低: %.1f < %.1f", req.Temperature, *threshold.TempMin))
+
+	if threshold.TempMin != nil && temp != nil && *temp < *threshold.TempMin {
+		alertItems = append(alertItems, fmt.Sprintf("温度过低: %.1f < %.1f", *temp, *threshold.TempMin))
 	}
-	if threshold.HumidityMax != nil && req.Humidity > *threshold.HumidityMax {
-		alertItems = append(alertItems, fmt.Sprintf("湿度过高: %.1f > %.1f", req.Humidity, *threshold.HumidityMax))
+
+	humid := req.GetHumidity()
+	if threshold.HumidityMax != nil && humid != nil && *humid > *threshold.HumidityMax {
+		alertItems = append(alertItems, fmt.Sprintf("湿度过高: %.1f > %.1f", *humid, *threshold.HumidityMax))
 	}
-	if threshold.HumidityMin != nil && req.Humidity < *threshold.HumidityMin {
-		alertItems = append(alertItems, fmt.Sprintf("湿度过低: %.1f < %.1f", req.Humidity, *threshold.HumidityMin))
+	if threshold.HumidityMin != nil && humid != nil && *humid < *threshold.HumidityMin {
+		alertItems = append(alertItems, fmt.Sprintf("湿度过低: %.1f < %.1f", *humid, *threshold.HumidityMin))
 	}
 
 	if len(alertItems) == 0 {
@@ -332,8 +340,8 @@ func AcceptDistanceThreshold(c *gin.Context) {
 	}
 
 	// 默认报警间隔 5 分钟
-	if req.AlertSeconds <= 0 {
-		req.AlertSeconds = 300
+	if req.AlertInterval <= 0 {
+		req.AlertInterval = 300
 	}
 
 	var threshold model.DistanceThreshold
@@ -346,7 +354,7 @@ func AcceptDistanceThreshold(c *gin.Context) {
 			UserID:        userID,
 			DeviceID:      req.DeviceID,
 			DistanceMin:   req.DistanceMin,
-			AlertInterval: req.AlertSeconds,
+			AlertInterval: req.AlertInterval,
 			IsActive:      req.IsActive,
 		}
 		if err := model.DB.Create(&threshold).Error; err != nil {
@@ -360,7 +368,7 @@ func AcceptDistanceThreshold(c *gin.Context) {
 		// 更新现有记录
 		updates := map[string]interface{}{
 			"distance_min":   req.DistanceMin,
-			"alert_interval": req.AlertSeconds,
+			"alert_interval": req.AlertInterval,
 			"is_active":      req.IsActive,
 		}
 		if err := model.DB.Model(&threshold).Updates(updates).Error; err != nil {
@@ -383,7 +391,8 @@ func AcceptDistanceThreshold(c *gin.Context) {
 }
 
 func DistanceAlert(c *gin.Context) {
-	var req pkg.DistanceAlertRequest
+	var req pkg.SensorDataRequest
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
@@ -412,7 +421,33 @@ func DistanceAlert(c *gin.Context) {
 		return
 	}
 
-	if threshold.DistanceMin == nil || req.Distance >= *threshold.DistanceMin {
+	if threshold.DistanceMin == nil || req.Distance == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    200,
+			"message": "距离正常",
+		})
+		return
+	}
+
+	distanceStr, ok := req.Distance.(string)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "距离数据类型错误",
+		})
+		return
+	}
+	distance, err := strconv.ParseFloat(distanceStr, 64)
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "距离数据格式错误",
+		})
+		return
+	}
+
+	if distance >= *threshold.DistanceMin {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    200,
 			"message": "距离正常",
@@ -560,11 +595,50 @@ func SensorData(c *gin.Context) {
 
 	// 索引到 Elasticsearch
 	go func() {
-		err := elasticsearch.IndexSensorData(req.DeviceID, req.Temperature, req.Humidity, req.Distance)
+		temperature := req.GetTemperature()
+		humidity := req.GetHumidity()
+		distance := req.GetDistance()
+		tempValue := 0.0
+		humidValue := 0.0
+		distValue := 0.0
+		if temperature != nil {
+			tempValue = *temperature
+		}
+		if humidity != nil {
+			humidValue = *humidity
+		}
+		if distance != nil {
+			distValue = *distance
+		}
+		err := elasticsearch.IndexSensorData(req.DeviceID, tempValue, humidValue, distValue)
 		if err != nil {
 			log.Printf("[SensorData] 索引到 Elasticsearch 失败: %v", err)
 		}
 	}()
+
+	// 记录传感器状态
+	sensorStatus := req.GetSensorStatus()
+	log.Printf("[SensorData] 设备状态: device_id=%s, status=%v", req.DeviceID, sensorStatus)
+
+	// 检查传感器是否有错误
+	hasError := false
+	for _, status := range sensorStatus {
+		if status == "error" {
+			hasError = true
+			break
+		}
+	}
+
+	if hasError {
+		// 记录设备错误状态到 Redis
+		go func() {
+			ctx := context.Background()
+			errorKey := fmt.Sprintf("device:error:%d:%s", userID, req.DeviceID)
+			errorCount, _ := redis.Client.Incr(ctx, errorKey).Result()
+			redis.Client.Expire(ctx, errorKey, 24*time.Hour)
+			log.Printf("[SensorData] 设备传感器错误: device_id=%s, error_count=%d, status=%v", req.DeviceID, errorCount, sensorStatus)
+		}()
+	}
 
 	// 创建通道来接收两个处理结果
 	tempHumidityDone := make(chan bool, 1)
@@ -572,13 +646,13 @@ func SensorData(c *gin.Context) {
 
 	// 异步处理温湿度报警
 	go func() {
-		ProcessTempHumidityAlert(userID, req.DeviceID, req.Temperature, req.Humidity)
+		ProcessTempHumidityAlert(userID, req.DeviceID, req.GetTemperature(), req.GetHumidity())
 		tempHumidityDone <- true
 	}()
 
 	// 异步处理距离报警
 	go func() {
-		ProcessDistanceAlert(userID, req.DeviceID, req.Distance)
+		ProcessDistanceAlert(userID, req.DeviceID, req.GetDistance())
 		distanceDone <- true
 	}()
 
@@ -594,13 +668,21 @@ func SensorData(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    200,
-		"message": "传感器数据已接收并处理",
+		"code":          200,
+		"message":       "传感器数据已接收并处理",
+		"device_id":     req.DeviceID,
+		"sensor_status": sensorStatus,
+		"has_error":     hasError,
 	})
 }
 
 // 处理温湿度报警（内部函数）
-func ProcessTempHumidityAlert(userID uint, deviceID string, temperature, humidity float64) {
+func ProcessTempHumidityAlert(userID uint, deviceID string, temperature, humidity *float64) {
+	// 如果温度和湿度都为nil，直接返回
+	if temperature == nil && humidity == nil {
+		return
+	}
+
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("threshold:%d:%s", userID, deviceID)
 
@@ -643,17 +725,17 @@ func ProcessTempHumidityAlert(userID uint, deviceID string, temperature, humidit
 
 	// 收集报警信息
 	var alertItems []string
-	if threshold.TempMax != nil && temperature > *threshold.TempMax {
-		alertItems = append(alertItems, fmt.Sprintf("温度过高: %.1f > %.1f", temperature, *threshold.TempMax))
+	if threshold.TempMax != nil && temperature != nil && *temperature > *threshold.TempMax {
+		alertItems = append(alertItems, fmt.Sprintf("温度过高: %.1f > %.1f", *temperature, *threshold.TempMax))
 	}
-	if threshold.TempMin != nil && temperature < *threshold.TempMin {
-		alertItems = append(alertItems, fmt.Sprintf("温度过低: %.1f < %.1f", temperature, *threshold.TempMin))
+	if threshold.TempMin != nil && temperature != nil && *temperature < *threshold.TempMin {
+		alertItems = append(alertItems, fmt.Sprintf("温度过低: %.1f < %.1f", *temperature, *threshold.TempMin))
 	}
-	if threshold.HumidityMax != nil && humidity > *threshold.HumidityMax {
-		alertItems = append(alertItems, fmt.Sprintf("湿度过高: %.1f > %.1f", humidity, *threshold.HumidityMax))
+	if threshold.HumidityMax != nil && humidity != nil && *humidity > *threshold.HumidityMax {
+		alertItems = append(alertItems, fmt.Sprintf("湿度过高: %.1f > %.1f", *humidity, *threshold.HumidityMax))
 	}
-	if threshold.HumidityMin != nil && humidity < *threshold.HumidityMin {
-		alertItems = append(alertItems, fmt.Sprintf("湿度过低: %.1f < %.1f", humidity, *threshold.HumidityMin))
+	if threshold.HumidityMin != nil && humidity != nil && *humidity < *threshold.HumidityMin {
+		alertItems = append(alertItems, fmt.Sprintf("湿度过低: %.1f < %.1f", *humidity, *threshold.HumidityMin))
 	}
 
 	if len(alertItems) == 0 {
@@ -780,7 +862,12 @@ func findDistanceThreshold(userID uint, deviceID string, threshold *model.Distan
 }
 
 // 处理距离报警（内部函数）
-func ProcessDistanceAlert(userID uint, deviceID string, distance float64) {
+func ProcessDistanceAlert(userID uint, deviceID string, distance *float64) {
+	// 如果距离为nil，直接返回
+	if distance == nil {
+		return
+	}
+
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("distance_threshold:%d:%s", userID, deviceID)
 
@@ -822,12 +909,12 @@ func ProcessDistanceAlert(userID uint, deviceID string, distance float64) {
 	}
 
 	// 判断是否触发报警
-	if threshold.DistanceMin == nil || distance >= *threshold.DistanceMin {
-		//log.Printf("[processDistanceAlert] 距离正常: device_id=%s, distance=%.2f", deviceID, distance)
+	if threshold.DistanceMin == nil || *distance >= *threshold.DistanceMin {
+		//log.Printf("[processDistanceAlert] 距离正常: device_id=%s, distance=%.2f", deviceID, *distance)
 		return
 	}
 
-	alertMessage := fmt.Sprintf("距离过近: %.1f < %.1f", distance, *threshold.DistanceMin)
+	alertMessage := fmt.Sprintf("距离过近: %.1f < %.1f", *distance, *threshold.DistanceMin)
 	//log.Printf("[processDistanceAlert] 触发报警: %s", alertMessage)
 
 	// 防抖
@@ -899,7 +986,17 @@ func ProcessDistanceAlert(userID uint, deviceID string, distance float64) {
 
 // 7. 升级版阈值管理接口（查询、修改、配置报警行为）
 func ManageThreshold(c *gin.Context) {
-	var req pkg.ThresholdManageRequest
+	var req struct {
+		DeviceID     string   `json:"device_id" binding:"required"`
+		TempMax      *float64 `json:"temp_max,omitempty"`
+		TempMin      *float64 `json:"temp_min,omitempty"`
+		HumidityMax  *float64 `json:"humidity_max,omitempty"`
+		HumidityMin  *float64 `json:"humidity_min,omitempty"`
+		AlertSeconds int      `json:"alert_seconds,omitempty"`
+		IsActive     bool     `json:"is_active"`
+		AlertAction  string   `json:"alert_action,omitempty"`
+		LedColor     string   `json:"led_color,omitempty"`
+	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
@@ -1314,7 +1411,7 @@ func BindDevice(c *gin.Context) {
 	// 激活码限流检查
 	ctx := context.Background()
 	activationCodeKey := fmt.Sprintf("activation_code:limit:%s", req.ActivationCode)
-	
+
 	// 检查激活码使用次数
 	count, err := redis.Client.Get(ctx, activationCodeKey).Int()
 	if err == nil && count >= 3 { // 每个激活码最多使用3次
@@ -1398,12 +1495,12 @@ func BindDevice(c *gin.Context) {
 		"code":    200,
 		"message": "设备绑定成功",
 		"data": gin.H{
-			"device_id":     factoryConfig.DeviceID,
-			"device_name":   userDevice.DeviceName,
-			"secret_key":    factoryConfig.SecretKey,
-			"is_activated":  factoryConfig.IsActivated,
-			"bound_at":      userDevice.CreatedAt,
-			"info": "请将此device_id和secret_key配置到设备中，设备上传数据时需要使用此device_id",
+			"device_id":    factoryConfig.DeviceID,
+			"device_name":  userDevice.DeviceName,
+			"secret_key":   factoryConfig.SecretKey,
+			"is_activated": factoryConfig.IsActivated,
+			"bound_at":     userDevice.CreatedAt,
+			"info":         "请将此device_id和secret_key配置到设备中，设备上传数据时需要使用此device_id",
 		},
 	})
 }
@@ -1558,11 +1655,11 @@ func GetUserNotifications(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":          200,
-		"message":       "获取提醒列表成功",
-		"data":          notifications,
-		"unread_count":  unreadCount,
-		"total_count":   len(notifications),
+		"code":         200,
+		"message":      "获取提醒列表成功",
+		"data":         notifications,
+		"unread_count": unreadCount,
+		"total_count":  len(notifications),
 	})
 }
 
@@ -1604,7 +1701,7 @@ func MarkNotificationAsRead(c *gin.Context) {
 		"message": "提醒已标记为已读",
 		"data": gin.H{
 			"notification_id": notificationID,
-			"is_read":        true,
+			"is_read":         true,
 		},
 	})
 }
